@@ -1,16 +1,16 @@
 services:
-  app:
+  frontend:
     build:
       context: .
-      dockerfile: Dockerfile
-      
-    container_name: planning-poker
+      dockerfile: Dockerfile.frontend
+
+    container_name: planning-poker-frontend
 
     ports:
       - "5173:5173"
 
     volumes:
-      - .:/app
+      - ./frontend:/app
       - /app/node_modules
 
     command: npm run dev -- --host 0.0.0.0
