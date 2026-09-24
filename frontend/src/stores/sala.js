@@ -1,64 +1,112 @@
 import { defineStore } from 'pinia'
+import { socket } from '../services/socket.js'
 import { useParticipanteStore } from './participante.js'
 
-const CARTAS_INICIAIS = [0, 0.5, 1, 2, 3, 5, 8, 13, 21]
+const SESSION_KEY = 'planning-poker:sala'
+function savedSession(value) {
+  try {
+    if (value === undefined) return JSON.parse(localStorage.getItem(SESSION_KEY) || 'null')
+    if (value === null) localStorage.removeItem(SESSION_KEY)
+    else localStorage.setItem(SESSION_KEY, JSON.stringify(value))
+  } catch { /* Recovery remains available in memory if storage is blocked. */ }
+}
 
 export const useSalaStore = defineStore('sala', {
-  state: () => ({
-    codigo: null,
-    hostId: null,
-    participantes: [],
-    cartas: [...CARTAS_INICIAIS],
-    votoAtual: null,
-    votosRevelados: false,
-  }),
+  state: () => ({ room: null, connected: socket.connected, error: null, pending: false, session: savedSession(), restoring: false, generation: 0, initialized: false }),
   getters: {
-    ehHost: (state) =>
-      Boolean(state.hostId && state.hostId === useParticipanteStore().id),
+    participantId: () => useParticipanteStore().id,
+    participantName: () => useParticipanteStore().nome,
+    me: state => state.room?.participants.find(person => person.id === useParticipanteStore().id) ?? null,
+    isHost: state => Boolean(state.room && state.room.hostId === useParticipanteStore().id),
+    participants: state => state.room?.participants ?? [],
+    codigo: state => state.room?.code ?? null,
+    hostId: state => state.room?.hostId ?? null,
+    cartas: state => state.room?.config.cards ?? [],
+    status: state => state.room?.votacao.status ?? 'aguardando',
+    meuVoto: state => state.room?.votacao.votos[useParticipanteStore().id],
+    resultado: state => {
+      if (state.room?.votacao.status !== 'revelada') return null
+      const votes = Object.values(state.room.votacao.votos)
+      const numeric = votes.filter(v => (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '')) && Number.isFinite(Number(v))).map(Number)
+      return { quantidade: votes.length, media: numeric.length ? numeric.reduce((sum, v) => sum + v / numeric.length, 0) : null }
+    },
+    ehHost() { return this.isHost },
   },
   actions: {
-    // Estado provisório: existência, nomes únicos e host serão validados pelo servidor.
-    iniciar(codigo, criar = false) {
-      const participante = useParticipanteStore()
-      if (!participante.id || !participante.nome || !codigo.trim()) return false
-      this.$reset()
-      this.codigo = codigo.trim().toUpperCase()
-      this.hostId = criar ? participante.id : null
-      this.participantes = [
-        { id: participante.id, nome: participante.nome, voto: null },
-      ]
-      return true
+    limparSessao() {
+      this.room = null
+      this.session = null
+      savedSession(null)
     },
-    votar(carta) {
-      const atual = this.participantes.find(
-        ({ id }) => id === useParticipanteStore().id,
-      )
-      if (!atual || !this.cartas.includes(carta)) return
-      this.votoAtual = carta
-      atual.voto = carta
-      this.votosRevelados = false
+    async recuperar() {
+      if (!this.session || this.restoring) return
+      this.restoring = true
+      try {
+        const ok = await this.joinRoom(this.session.roomCode, this.session.name)
+        if (!ok && this.error?.code === 'ROOM_NOT_FOUND') this.limparSessao()
+      } finally { this.restoring = false }
     },
-    revelarVotos() {
-      if (this.votoAtual !== null) this.votosRevelados = true
-    },
-    configurarCartas(texto) {
-      if (!this.ehHost) return 'Somente o host pode alterar as cartas.'
-      const valores = texto.split(',').map((valor) => valor.trim())
-      if (
-        valores.some(
-          (valor) =>
-            !/^\d+(\.\d+)?$/.test(valor) || !Number.isFinite(Number(valor)),
-        )
-      ) {
-        return 'Informe números separados por vírgula. Use ponto nos decimais, como 0.5.'
-      }
-      this.cartas = [...new Set(valores.map(Number))]
-      this.votoAtual = null
-      this.votosRevelados = false
-      this.participantes.forEach((participante) => {
-        participante.voto = null
+    inicializar() {
+      useParticipanteStore().inicializar()
+      if (this.initialized) return
+      this.initialized = true
+      socket.on('connect', () => { this.connected = true; this.recuperar() })
+      socket.on('disconnect', () => {
+        this.connected = false
+        this.pending = false
+        this.restoring = false
+        this.generation++
       })
-      return null
+      socket.on('connect_error', () => {
+        this.connected = false
+        this.error = { code: 'CONNECTION_ERROR', message: 'Não foi possível conectar ao servidor.' }
+      })
+      socket.on('room:state', room => {
+        this.room = room
+        useParticipanteStore().nome = this.me?.name ?? ''
+        this.session = { roomCode: room.code, name: this.me?.name }
+        savedSession(this.session)
+        this.error = null
+      })
+      socket.on('room:left', () => this.limparSessao())
+      socket.on('room:replaced', () => {
+        // Do not erase shared localStorage: the new tab owns the same identity.
+        this.room = null
+        this.session = null
+        this.error = { code: 'SESSION_REPLACED', message: 'Sua participação foi aberta em outra aba.' }
+      })
+      socket.on('room:error', error => { this.error = error })
+      if (socket.connected) this.recuperar()
     },
+    async enviar(event, payload) {
+      this.inicializar()
+      if (this.pending) return false
+      this.error = null
+      if (!socket.connected) {
+        this.error = { code: 'NOT_CONNECTED', message: 'Aguarde a conexão com o servidor e tente novamente.' }
+        return false
+      }
+      this.pending = true
+      const generation = this.generation
+      try {
+        const response = await socket.timeout(8000).emitWithAck(event, {
+          ...payload, participantId: this.participantId,
+        })
+        if (generation !== this.generation) return false
+        if (!response.ok) this.error = response.error
+        return response.ok
+      } catch {
+        if (generation === this.generation) this.error = { code: 'REQUEST_TIMEOUT', message: 'O servidor não confirmou a operação. Confira a conexão antes de tentar novamente.' }
+        return false
+      } finally {
+        if (generation === this.generation) this.pending = false
+      }
+    },
+    createRoom(name, cards) { return this.enviar('room:create', { name, cards }) },
+    joinRoom(roomCode, name) { return this.enviar('room:join', { roomCode, name }) },
+    iniciarVotacao() { return this.enviar('room:start-voting', { roomCode: this.codigo }) },
+    votar(card) { return this.enviar('room:vote', { roomCode: this.codigo, card }) },
+    revelarVotos() { return this.enviar('room:reveal-votes', { roomCode: this.codigo }) },
+    sair() { return this.enviar('room:leave', { roomCode: this.codigo }) },
   },
 })

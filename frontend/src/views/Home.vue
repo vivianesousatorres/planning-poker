@@ -13,32 +13,18 @@ const codigo = ref('')
 const erroCriar = ref('')
 const erroEntrar = ref('')
 
-function criarSala() {
+async function criarSala() {
   erroCriar.value = ''
-  if (!participante.definirParticipante(nomeCriador.value)) {
-    erroCriar.value = 'Informe seu nome para criar uma sala.'
-    return
-  }
-  // Código temporário, sem registro ou garantia de unicidade no servidor.
-  const bytes = crypto.getRandomValues(new Uint8Array(6))
-  const alfabeto = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const codigoTemporario = Array.from(
-    bytes,
-    (byte) => alfabeto[byte % alfabeto.length],
-  ).join('')
-  sala.iniciar(codigoTemporario, true)
-  router.push({ name: 'sala', params: { codigo: sala.codigo } })
+  if (await sala.createRoom(nomeCriador.value)) {
+    router.push({ name: 'sala', params: { codigo: sala.codigo } })
+  } else erroCriar.value = sala.error?.message ?? ''
 }
 
-function entrarSala() {
+async function entrarSala() {
   erroEntrar.value = ''
-  if (!codigo.value.trim() || !nomeParticipante.value.trim()) {
-    erroEntrar.value = 'Informe o código da sala e seu nome.'
-    return
-  }
-  participante.definirParticipante(nomeParticipante.value)
-  sala.iniciar(codigo.value)
-  router.push({ name: 'sala', params: { codigo: sala.codigo } })
+  if (await sala.joinRoom(codigo.value, nomeParticipante.value)) {
+    router.push({ name: 'sala', params: { codigo: sala.codigo } })
+  } else erroEntrar.value = sala.error?.message ?? ''
 }
 </script>
 
@@ -85,7 +71,7 @@ function entrarSala() {
             />
           </div>
           <p id="erro-criar" class="form-error" role="alert">{{ erroCriar }}</p>
-          <button class="btn btn-primary" type="submit">
+          <button class="btn btn-primary" type="submit" :disabled="sala.pending || !sala.connected">
             Criar sala
             <span aria-hidden="true">↗</span>
           </button>
@@ -125,7 +111,7 @@ function entrarSala() {
           <p id="erro-entrar" class="form-error" role="alert">
             {{ erroEntrar }}
           </p>
-          <button class="btn btn-secondary" type="submit">
+          <button class="btn btn-secondary" type="submit" :disabled="sala.pending || !sala.connected">
             Entrar
             <span aria-hidden="true">→</span>
           </button>
@@ -134,7 +120,7 @@ function entrarSala() {
     </section>
     <p class="home__footnote">
       <span class="status-dot"></span>
-      Prévia local · As salas ainda não são compartilhadas entre usuários.
+      {{ sala.connected ? 'Conectado · Salas compartilhadas em tempo real.' : 'Aguardando conexão com o servidor…' }}
     </p>
   </main>
 </template>
