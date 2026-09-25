@@ -74,6 +74,15 @@ function createRoomRepository() {
             }
             return room;
         },
+        transferHost(code, participantId, socketId, targetParticipantId) {
+            const room = this.requireMember(code, participantId, socketId);
+            if (room.hostId !== participantId) throw new RoomError('HOST_ONLY', 'Somente o host pode realizar esta ação.');
+            if (!room.participants.some(person => person.id === targetParticipantId)) {
+                throw new RoomError('PARTICIPANT_NOT_FOUND', 'Participante não encontrado nesta sala.');
+            }
+            room.hostId = targetParticipantId;
+            return room;
+        },
         vote(code, participantId, socketId, card) {
             const room = this.requireMember(code, participantId, socketId);
             if (room.votacao.status !== 'votando') throw new RoomError('VOTING_CLOSED', 'A votação não está aberta.');

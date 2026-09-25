@@ -56,6 +56,8 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
                             await socket.leave(roomCode);
                             socket.data = {};
                             socket.emit('room:left');
+                        } else if (action === 'transferHost') {
+                            room = repository.transferHost(roomCode, participantId, socket.id, data?.targetParticipantId);
                         } else room = repository[action](roomCode, participantId, socket.id, data?.card);
                     }
                     publish(room);
@@ -73,6 +75,7 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
         socket.on('room:create', handle('create'));
         socket.on('room:join', handle('join'));
         socket.on('room:leave', handle('leave'));
+        socket.on('room:transfer-host', handle('transferHost'));
         socket.on('room:start-voting', handle('startVoting'));
         socket.on('room:vote', handle('vote'));
         socket.on('room:reveal-votes', handle('revealVotes'));

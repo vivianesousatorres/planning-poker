@@ -32,6 +32,10 @@ O backend usa `nodemon --legacy-watch --watch src`, verificando alterações por
 
 ## Criação e entrada
 
+### Componentes de interface
+
+Home, Sala e ConfiguracaoSala reutilizam `CampoTexto` (label/input com `v-model` e slot para ajuda), `BotaoBase` (variantes primary, secondary e quiet) e `MensagemErro` (alerta acessível). `MarcaApp` e `StatusConexao` são compartilhados entre Home e Sala. Os componentes ficam em `frontend/src/components`, não acessam stores nem Socket.IO e preservam as classes CSS existentes. `CampoTexto` encaminha atributos como `required`, `maxlength`, `class` e `aria-describedby` ao input; `BotaoBase` usa `type="button"` por padrão e encaminha eventos e atributos ao botão nativo. Formulários informam explicitamente `type="submit"`.
+
 A tela chama a store, que envia `room:create` com `{ participantId, name, cards }`. O backend valida UUID, nome (1 a 60 caracteres após trim) e cartas (1 a 100 números finitos não negativos), gera o código, registra o criador como host e associa o socket à sala. Cartas omitidas usam `[0, 0.5, 1, 2, 3, 5, 8, 13, 21]`, preservando o conjunto existente; valores repetidos são removidos.
 
 Na entrada, a store envia `room:join` com `{ roomCode, participantId, name }`. O servidor normaliza o código, verifica a existência da sala e impede nomes duplicados ignorando maiúsculas/minúsculas e espaços nas extremidades. O mesmo ID pode reentrar: sua conexão e nome são atualizados sem duplicar o participante nem perder o papel de host. Um novo nome também passa pela verificação de duplicidade.
@@ -52,6 +56,10 @@ Todos usam o evento existente `room:state`. Cada participante recebe `participan
 ## Ciclo de vida e recuperação
 
 O ciclo de vida é tratado separadamente das operações de votação. `room:leave` remove imediatamente participante e voto. Se era host, o primeiro participante restante assume; uma sala sem participantes é excluída.
+
+O host pode usar **Transferir host** junto ao nome de outro participante. A store envia `room:transfer-host` com `{ roomCode, participantId, targetParticipantId }`: `participantId` é o solicitante e `targetParticipantId` é o destinatário. O backend valida a sala, a associação ao socket atual, a permissão de host (`HOST_ONLY`) e a presença do destinatário na mesma sala (`PARTICIPANT_NOT_FOUND`). Somente `hostId` muda; cartas, rodada e votos permanecem. O novo host recebe imediatamente o controle da votação, e o anterior perde essa permissão. A interface aguarda `room:state`, sem mudança local antecipada nem evento redundante.
+
+**Sair da sala** está disponível para todos. Após confirmação do servidor, a participação é limpa e a tela volta ao início. Apenas `planning-poker:sala` é removida do localStorage; o UUID em `planning-poker:participante-id` e outras chaves são preservados. Tentar entrar em uma sala destruída retorna o mesmo `ROOM_NOT_FOUND` de um código inexistente.
 
 Uma desconexão temporária reserva a participação por **60 segundos**. Reentrar com o mesmo ID durante esse prazo preserva identidade, papel, participação e voto da rodada atual. O frontend tenta reassociar automaticamente no evento `connect`, usando o UUID existente e a chave `planning-poker:sala` (código/nome) no localStorage. Recarregar também permite recuperar a participação. Se o prazo expirar, a saída torna-se definitiva e o voto é removido; uma entrada posterior começa sem voto. O servidor continua sendo a fonte da verdade, inclusive se a rodada mudar durante a queda.
 
@@ -99,3 +107,36 @@ Os testes usam `node:test`, um servidor Socket.IO em porta temporária e cliente
 Os testes automatizados incluem projeções de todos os eventos/acknowledgements antes da revelação, permissões, troca de voto, entrada tardia, reconexão, socket antigo, transferência de host e destruição da sala. A inspeção visual em navegador é uma validação separada do build.
 
 Teste de regressão da store de votação: `node --test frontend/test/sala.test.js`. Garante que iniciar/votar não repete a inicialização nem dispara reentrada que bloqueie o comando.
+
+## Roteiro do host e saída
+
+Use três perfis independentes para Ana (criadora), Bruno e Carlos:
+
+1. Bruno usa Sair da sala: Ana continua host e Carlos permanece; Bruno retorna ao início.
+2. Em uma sala com os três, Ana transfere para Carlos: todos veem Carlos como host, Ana perde os controles e Carlos pode controlar a rodada existente sem perder votos.
+3. Em outra sala com os três nessa ordem de entrada, Ana sai: Bruno assume e Carlos permanece.
+4. Ana cria uma sala sozinha e sai: tentar entrar pelo código retorna sala não encontrada.
+5. Ana e Bruno estão na sala; Ana atualiza a página e reconecta em menos de 60 segundos: mantém identidade, host e voto, sem duplicar a participação.
+6. Um participante comum envia `room:transfer-host` diretamente: recebe `HOST_ONLY` e o host não muda. Destinatários ausentes são rejeitados sem modificar a sala.
+
+Os testes de backend exercitam clientes Socket.IO reais, incluindo transferência, sincronização para três clientes, privacidade dos votos e mudança de permissões. Os testes da store verificam a espera pelo estado do servidor e a limpeza seletiva do localStorage. Execute também `node --test frontend/test/sala.test.js` e o build do frontend; a validação visual segue o roteiro acima.
+
+## Estilização com Tailwind
+
+Tailwind CSS 4 é integrado pelo plugin @tailwindcss/vite em frontend/vite.config.js e importado em frontend/src/style.css. As dependências já estão registradas no package.json e lockfile. Novos estilos devem usar utilities Tailwind; cores compartilhadas ficam em @theme (accent, line e surface). Use classes completas em mapas de variantes, evitando interpolar nomes de utilities.
+
+Sala.vue e BotaoBase.vue foram migrados. Os limites responsivos de 700 e 1000 px, cores, espaçamentos e estados foram preservados. Os componentes compartilhados de campo, marca, erro e conexão continuam usando o CSS legado em @layer components; estilos globais ficam em @layer base. Não duplique propriedades nos dois sistemas. O layout dos botões da Home usa mt-auto e w-full. BotaoBase não usa a classe genérica btn, evitando conflito com regras Bootstrap de folhas de estilo injetadas no navegador. As regras exclusivas da sala e as antigas variantes de botão foram removidas.
+
+Os ícones são imports individuais de lucide-vue-next. Transferir host usa ArrowRightLeft em botão de 32 px, com title, aria-label e confirmação nativa antes de chamar a store. Os outros ícones acompanham os textos das ações. Socket.IO e regras do backend não foram modificados nesta migração.
+
+Com os containers ativos, sincronize dependências e valide:
+
+~~~sh
+docker compose exec -T frontend npm ci
+docker compose restart frontend
+docker compose exec -T frontend npm run build
+docker compose exec -T frontend node --test test/sala.test.js
+docker compose exec -T backend npm test
+~~~
+
+Para iniciar o ambiente: docker compose up -d --build. Não é necessário excluir volumes. Confira Home e Sala em desktop e celular, incluindo foco por teclado, seleção de cartas, confirmação/cancelamento de transferência e estados de conexão.

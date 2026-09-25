@@ -108,5 +108,6 @@ export const useSalaStore = defineStore('sala', {
     votar(card) { return this.enviar('room:vote', { roomCode: this.codigo, card }) },
     revelarVotos() { return this.enviar('room:reveal-votes', { roomCode: this.codigo }) },
     sair() { return this.enviar('room:leave', { roomCode: this.codigo }) },
+    transferirHost(targetParticipantId) { return this.enviar('room:transfer-host', { roomCode: this.codigo, targetParticipantId }) },
   },
 })

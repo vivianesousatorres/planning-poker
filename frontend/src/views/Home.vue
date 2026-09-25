@@ -1,4 +1,9 @@
 <script setup>
+import CampoTexto from '../components/CampoTexto.vue'
+import BotaoBase from '../components/BotaoBase.vue'
+import MensagemErro from '../components/MensagemErro.vue'
+import MarcaApp from '../components/MarcaApp.vue'
+import StatusConexao from '../components/StatusConexao.vue'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useParticipanteStore } from '../stores/participante'
@@ -30,10 +35,7 @@ async function entrarSala() {
 
 <template>
   <main class="home">
-    <div class="home__brand">
-      <span class="brand-mark" aria-hidden="true">♠</span>
-      Planning Poker
-    </div>
+    <MarcaApp class="home__brand" />
     <section class="home__card panel" aria-labelledby="titulo-home">
       <header class="home__header">
         <span class="eyebrow">MENOS SUPOSIÇÕES. MAIS CONVERSA.</span>
@@ -57,70 +59,60 @@ async function entrarSala() {
           <span class="section-icon" aria-hidden="true">＋</span>
           <h2>Comece uma rodada</h2>
           <p>Crie uma sala e prepare as cartas do time.</p>
-          <div class="form-group">
-            <label for="nomeCriador">Seu nome</label>
-            <input
-              id="nomeCriador"
-              v-model="nomeCriador"
-              placeholder="Como podemos chamar você?"
-              autocomplete="given-name"
-              maxlength="60"
-              required
-              :aria-invalid="Boolean(erroCriar)"
-              aria-describedby="erro-criar"
-            />
-          </div>
-          <p id="erro-criar" class="form-error" role="alert">{{ erroCriar }}</p>
-          <button class="btn btn-primary" type="submit" :disabled="sala.pending || !sala.connected">
+          <CampoTexto
+            id="nomeCriador" label="Seu nome"
+            v-model="nomeCriador"
+            placeholder="Como podemos chamar você?"
+            autocomplete="given-name"
+            maxlength="60"
+            required
+            :aria-invalid="Boolean(erroCriar)"
+            aria-describedby="erro-criar"
+          />
+          <MensagemErro id="erro-criar">{{ erroCriar }}</MensagemErro>
+          <BotaoBase class="mt-auto w-full" variante="primary" type="submit" :disabled="sala.pending || !sala.connected">
             Criar sala
             <span aria-hidden="true">↗</span>
-          </button>
+          </BotaoBase>
         </form>
         <div class="home__divider"><span>ou</span></div>
         <form class="home__section" @submit.prevent="entrarSala">
           <span class="section-icon" aria-hidden="true">↗</span>
           <h2>Entre em uma sala</h2>
           <p>Já tem um código? Seu lugar está aqui.</p>
-          <div class="form-group">
-            <label for="codigoSala">Código da sala</label>
-            <input
-              id="codigoSala"
-              v-model="codigo"
-              class="code-input"
-              placeholder="Ex: AB12CD"
-              autocomplete="off"
-              maxlength="64"
-              required
-              :aria-invalid="Boolean(erroEntrar)"
-              aria-describedby="erro-entrar"
-            />
-          </div>
-          <div class="form-group">
-            <label for="nomeParticipante">Seu nome</label>
-            <input
-              id="nomeParticipante"
-              v-model="nomeParticipante"
-              placeholder="Como podemos chamar você?"
-              autocomplete="given-name"
-              maxlength="60"
-              required
-              :aria-invalid="Boolean(erroEntrar)"
-              aria-describedby="erro-entrar"
-            />
-          </div>
-          <p id="erro-entrar" class="form-error" role="alert">
+          <CampoTexto
+            id="codigoSala" label="Código da sala"
+            v-model="codigo"
+            class="code-input"
+            placeholder="Ex: AB12CD"
+            autocomplete="off"
+            maxlength="64"
+            required
+            :aria-invalid="Boolean(erroEntrar)"
+            aria-describedby="erro-entrar"
+          />
+          <CampoTexto
+            id="nomeParticipante" label="Seu nome"
+            v-model="nomeParticipante"
+            placeholder="Como podemos chamar você?"
+            autocomplete="given-name"
+            maxlength="60"
+            required
+            :aria-invalid="Boolean(erroEntrar)"
+            aria-describedby="erro-entrar"
+          />
+          <MensagemErro id="erro-entrar">
             {{ erroEntrar }}
-          </p>
-          <button class="btn btn-secondary" type="submit" :disabled="sala.pending || !sala.connected">
+          </MensagemErro>
+          <BotaoBase class="mt-auto w-full" variante="secondary" type="submit" :disabled="sala.pending || !sala.connected">
             Entrar
             <span aria-hidden="true">→</span>
-          </button>
+          </BotaoBase>
         </form>
       </div>
     </section>
-    <p class="home__footnote">
-      <span class="status-dot"></span>
-      {{ sala.connected ? 'Conectado · Salas compartilhadas em tempo real.' : 'Aguardando conexão com o servidor…' }}
-    </p>
+    <StatusConexao class="home__footnote" tag="p" :conectado="sala.connected"
+      texto-conectado="Conectado · Salas compartilhadas em tempo real."
+      texto-desconectado="Aguardando conexão com o servidor…" />
   </main>
 </template>

@@ -1,4 +1,7 @@
 <script setup>
+import CampoTexto from './CampoTexto.vue'
+import BotaoBase from './BotaoBase.vue'
+import MensagemErro from './MensagemErro.vue'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useSalaStore } from '../stores/sala'
 
@@ -32,41 +35,39 @@ function salvar() {
           <span class="eyebrow">DO SEU JEITO</span>
           <h2 id="titulo-configuracao">Configurações da sala</h2>
         </div>
-        <button
+        <BotaoBase
           type="button"
-          class="btn btn-quiet modal__close"
+          variante="quiet" tamanho="close"
           aria-label="Fechar configurações"
           @click="emit('fechar')"
         >
           ×
-        </button>
+        </BotaoBase>
       </header>
       <p id="descricao-configuracao">
         Defina as cartas disponíveis para a próxima escolha.
       </p>
-      <div class="form-group">
-        <label for="cartas">Cartas</label>
-        <input
-          id="cartas"
-          v-model="cartas"
-          autofocus
-          autocomplete="off"
-          :aria-invalid="Boolean(erro)"
-          aria-describedby="dica-cartas erro-cartas"
-        />
+      <CampoTexto
+        id="cartas" label="Cartas"
+        v-model="cartas"
+        autofocus
+        autocomplete="off"
+        :aria-invalid="Boolean(erro)"
+        aria-describedby="dica-cartas erro-cartas"
+      >
         <small id="dica-cartas">
           Separe por vírgulas e use ponto nos decimais. Ex.: 0, 0.5, 1, 2, 3, 5.
         </small>
-      </div>
+      </CampoTexto>
       <p class="modal__note">
         Salvar limpa a seleção atual. Valores repetidos aparecem uma única vez.
       </p>
-      <p id="erro-cartas" class="form-error" role="alert">{{ erro }}</p>
+      <MensagemErro id="erro-cartas">{{ erro }}</MensagemErro>
       <footer class="modal__footer">
-        <button type="button" class="btn btn-secondary" @click="emit('fechar')">
+        <BotaoBase type="button" variante="secondary" @click="emit('fechar')">
           Cancelar
-        </button>
-        <button type="submit" class="btn btn-primary">Salvar</button>
+        </BotaoBase>
+        <BotaoBase type="submit" variante="primary">Salvar</BotaoBase>
       </footer>
     </form>
   </dialog>

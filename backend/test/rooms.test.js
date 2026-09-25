@@ -113,6 +113,64 @@ async function setup(t, grace = 1000) {
     return { host, guest, client };
 }
 
+test('transferência manual sincroniza todos, valida permissões e preserva a rodada', async t => {
+    const { host, guest, client } = await setup(t);
+    const third = await client();
+    await third.send('room:join', { roomCode: host.state.code, name: 'Carlos' });
+    await host.send('room:start-voting');
+    await host.send('room:vote', { card: 5 });
+    await guest.send('room:vote', { card: 3 });
+    assert.equal((await guest.send('room:transfer-host', { targetParticipantId: third.id })).error.code, 'HOST_ONLY');
+    for (const targetParticipantId of [undefined, null, randomUUID(), {}]) {
+        assert.equal((await host.send('room:transfer-host', { targetParticipantId })).error.code, 'PARTICIPANT_NOT_FOUND');
+    }
+    assert.equal(host.state.hostId, host.id);
+    const updates = [host, guest, third].map(c => next(c.socket, 'room:state', state => state.hostId === third.id));
+    assert.equal((await host.send('room:transfer-host', { targetParticipantId: third.id })).ok, true);
+    const states = await Promise.all(updates);
+    for (const state of states) {
+        assert.equal(state.hostId, third.id);
+        assert.equal(state.participants.length, 3);
+        assert.equal(state.votacao.status, 'votando');
+        assert.deepEqual(state.config.cards, [0, 0.5, 3, 5, 13]);
+    }
+    assert.deepEqual(states.map(state => state.votacao.votos), [{ [host.id]: 5 }, { [guest.id]: 3 }, {}]);
+    assert.equal((await host.send('room:transfer-host', { targetParticipantId: guest.id })).error.code, 'HOST_ONLY');
+    assert.equal((await host.send('room:reveal-votes')).error.code, 'HOST_ONLY');
+    assert.equal((await third.send('room:reveal-votes')).ok, true);
+    assert.deepEqual(third.state.votacao.votos, { [host.id]: 5, [guest.id]: 3 });
+    assert.equal((await host.send('room:start-voting')).error.code, 'HOST_ONLY');
+    assert.equal((await third.send('room:start-voting')).ok, true);
+});
+
+test('saída voluntária do participante e do host respeita a ordem dos participantes', async t => {
+    const { host, guest, client } = await setup(t);
+    const third = await client();
+    await third.send('room:join', { roomCode: host.state.code, name: 'Carlos' });
+    const updates = [host, third].map(c => next(c.socket, 'room:state', state => state.participants.length === 2));
+    const left = next(guest.socket, 'room:left');
+    assert.equal((await guest.send('room:leave')).ok, true);
+    await left;
+    for (const state of await Promise.all(updates)) {
+        assert.equal(state.hostId, host.id);
+        assert.deepEqual(state.participants.map(p => p.id), [host.id, third.id]);
+    }
+    assert.equal((await guest.send('room:vote', { card: 3 })).error.code, 'NOT_IN_ROOM');
+    await guest.send('room:join', { roomCode: host.state.code, name: 'Guest' });
+    const transferred = next(third.socket, 'room:state', state => state.participants.length === 2);
+    await host.send('room:leave');
+    assert.equal((await transferred).hostId, third.id);
+});
+
+test('transferência exige sala existente e associação ao socket atual', () => {
+    const repo = createRoomRepository();
+    const id = randomUUID();
+    const room = repo.create({ participantId: id, name: 'Ana' }, 'old');
+    repo.join({ participantId: id, name: 'Ana', roomCode: room.code }, 'new');
+    assert.throws(() => repo.transferHost(room.code, id, 'old', id), { code: 'NOT_IN_ROOM' });
+    assert.throws(() => repo.transferHost('ABSENT', id, 'new', id), { code: 'ROOM_NOT_FOUND' });
+});
+
 test('votação: autorização, privacidade de todos os payloads, alteração, entrada tardia e nova rodada', async t => {
     const { host, guest, client } = await setup(t);
     assert.equal(host.state.votacao.status, 'aguardando');
