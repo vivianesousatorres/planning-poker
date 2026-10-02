@@ -33,6 +33,19 @@ export const useSalaStore = defineStore('sala', {
     ehHost() { return this.isHost },
   },
   actions: {
+    assinarReacoes(listener) {
+      socket.on('room:reaction', listener)
+      return () => socket.off('room:reaction', listener)
+    },
+    async enviarReacao(targetParticipantId, emoji) {
+      if (!socket.connected || !this.me || this.restoring) return false
+      try {
+        const response = await socket.timeout(8000).emitWithAck('room:reaction', {
+          roomCode: this.codigo, targetParticipantId, emoji,
+        })
+        return response.ok
+      } catch { return false }
+    },
     limparSessao() {
       this.room = null
       this.session = null

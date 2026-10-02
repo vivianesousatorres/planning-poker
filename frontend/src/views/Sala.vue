@@ -1,23 +1,58 @@
 <script setup>
+import CartaParticipante from '../components/CartaParticipante.vue'
 import CampoTexto from '../components/CampoTexto.vue'
 import BotaoBase from '../components/BotaoBase.vue'
 import MensagemErro from '../components/MensagemErro.vue'
 import MarcaApp from '../components/MarcaApp.vue'
 import StatusConexao from '../components/StatusConexao.vue'
-import { ArrowRightLeft, Copy, LogOut, Settings, Play, Eye, RotateCcw } from 'lucide-vue-next'
-import { computed, ref } from 'vue'
+import { Copy, LogOut, Settings, Play, Eye, RotateCcw } from 'lucide-vue-next'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useParticipanteStore } from '../stores/participante'
 import { useSalaStore } from '../stores/sala'
+import { useReacoes } from '../composables/useReacoes'
+import { usePreferenciasReacoes } from '../composables/usePreferenciasReacoes'
 
 const route = useRoute()
 const router = useRouter()
 async function sair() { if (await sala.sair()) router.push('/') }
 const participante = useParticipanteStore()
 const sala = useSalaStore()
+const mesa = ref(null)
+function obterTrajeto(reacao) {
+  const cartas = Array.from(mesa.value?.querySelectorAll('[data-participant-id]') ?? [])
+  const localizar = id => cartas.find(carta => carta.dataset.participantId === id)
+    ?.querySelector('.participant-card__vote')?.getBoundingClientRect()
+  const origem = localizar(reacao.fromParticipantId)
+  const alvo = localizar(reacao.targetParticipantId)
+  if (!origem || !alvo) return null
+  return {
+    x: origem.left + origem.width / 2 - alvo.left - alvo.width / 2,
+    y: origem.top + origem.height / 2 - alvo.top - alvo.height / 2,
+  }
+}
+const { emojisRapidos, registrarUso } = usePreferenciasReacoes()
+const { reacoesAtivas, emCooldown, reagir } = useReacoes(sala, obterTrajeto, registrarUso)
+const seletorReacao = ref(null)
+function abrirSeletor(id, modo = 'rapido', interacao = 'click') {
+  if (interacao === 'hover' && seletorReacao.value?.modo === 'completo') return
+  seletorReacao.value = { participantId: id, modo }
+}
+function fecharSeletor(id) {
+  if (seletorReacao.value?.participantId === id) seletorReacao.value = null
+}
+watch(() => [sala.codigo, sala.connected, sala.me?.id], () => { seletorReacao.value = null })
+watch(() => sala.participants.map(p => p.id), ids => {
+  if (seletorReacao.value && !ids.includes(seletorReacao.value.participantId)) seletorReacao.value = null
+})
 const mensagemCopia = ref('')
 const nome = ref(participante.nome)
 const erro = ref('')
+// CSS wraps two balanced rails; no layouts specific to participant counts.
+const lugares = computed(() => {
+  const metade = Math.ceil(sala.participants.length / 2)
+  return [sala.participants.slice(0, metade), sala.participants.slice(metade)]
+})
 const codigo = computed(() => String(route.params.codigo).trim().toUpperCase())
 const estaNaSala = computed(() => sala.codigo === codigo.value && Boolean(sala.me))
 
@@ -80,7 +115,7 @@ async function copiarCodigo() {
       <BotaoBase variante="primary" class="mt-[22px] w-full" type="submit" :disabled="sala.pending || !sala.connected">Entrar</BotaoBase>
     </form>
     <template v-else>
-      <div class="flex items-center justify-between gap-5 pt-10 pb-7 [&_h2]:mb-2 [&_h2]:text-[clamp(1.5rem,3vw,2rem)] [&_p]:text-[0.9rem] [@media(max-width:700px)]:flex-col [@media(max-width:700px)]:items-start [@media(max-width:700px)]:pt-7">
+      <div class="flex items-center justify-between room-intro gap-4 pt-5 pb-4 [&_h2]:mb-2 [&_h2]:text-[clamp(1.5rem,3vw,2rem)] [&_p]:text-[0.9rem] [@media(max-width:700px)]:flex-col [@media(max-width:700px)]:items-start [@media(max-width:700px)]:pt-4">
         <div>
           <span class="mb-3 block text-[0.68rem] font-bold tracking-[0.16em] text-accent">ESPAÇO DO TIME</span>
           <h2>Uma carta, uma perspectiva.</h2>
@@ -88,47 +123,38 @@ async function copiarCodigo() {
         </div>
         <StatusConexao class="rounded-[30px] border border-[#322d41] bg-[#1b1926] px-3 py-2 text-[0.72rem] whitespace-nowrap text-[#b7afcd]" :conectado="sala.connected" />
       </div>
-      <div class="grid grid-cols-[265px_minmax(0,1fr)] items-start gap-6 [@media(max-width:1000px)]:grid-cols-[220px_minmax(0,1fr)] [@media(max-width:1000px)]:gap-[18px] [@media(max-width:700px)]:grid-cols-1">
-        <aside class="rounded-[22px] border border-line bg-surface shadow-[0_20px_70px_#00000020] px-5 py-6 [@media(max-width:700px)]:py-5">
-          <div class="flex items-center justify-between [&_h2]:text-[0.95rem]">
-            <h2>Participantes</h2>
-            <span class="rounded-[7px] bg-[#292c3c] px-[9px] py-[3px] text-[0.72rem] text-[#c9c9df]">{{ sala.participants.length }}</span>
+      <div class="room-layout">
+        <section ref="mesa" class="poker-table" aria-label="Mesa de Planning Poker">
+          <div v-for="(grupo, indice) in lugares" :key="indice" class="poker-table__rail" :class="indice === 0 ? 'poker-table__rail--top' : 'poker-table__rail--bottom'">
+            <CartaParticipante v-for="pessoa in grupo" :key="pessoa.id"
+              :pessoa="pessoa" :atual="pessoa.id === participante.id" :host="pessoa.id === sala.hostId"
+              :revelada="sala.status === 'revelada'" :voto="sala.room.votacao.votos[pessoa.id]"
+              :pode-transferir="sala.ehHost && pessoa.id !== sala.hostId"
+              :bloqueado="sala.pending || !sala.connected || sala.restoring"
+              :reacoes="reacoesAtivas.filter(r => r.targetParticipantId === pessoa.id)"
+              :emojis-rapidos="emojisRapidos"
+              :seletor-aberto="seletorReacao?.participantId === pessoa.id && seletorReacao.modo === 'rapido'"
+              :picker-aberto="seletorReacao?.participantId === pessoa.id && seletorReacao.modo === 'completo'"
+              :reacao-bloqueada="emCooldown || !sala.connected || sala.restoring"
+              @abrir-reacoes="abrirSeletor(pessoa.id, 'rapido', $event)"
+              @abrir-picker="abrirSeletor(pessoa.id, 'completo')"
+              @fechar-reacoes="fecharSeletor(pessoa.id)"
+              @reagir="reagir(pessoa.id, $event)"
+              @transferir="transferirHost(pessoa)" />
           </div>
-          <ul class="my-6 list-none p-0 [@media(max-width:700px)]:my-[14px]">
-            <li
-              v-for="pessoa in sala.participants"
-              :key="pessoa.id"
-              class="flex items-start gap-3 border-t border-line py-[15px]"
-            >
-              <span class="grid size-[38px] shrink-0 place-items-center rounded-xl border border-[#534269] bg-[#332b49] text-[#d3baff]">
-                {{ pessoa.name.slice(0, 1).toUpperCase() }}
-              </span>
-              <div class="flex min-w-0 flex-1 flex-col gap-0.5 [&_strong]:text-[0.88rem] [&_strong]:[overflow-wrap:anywhere]">
-                <strong>{{ pessoa.name }}</strong>
-                <small>
-                  {{ pessoa.id === participante.id ? 'Você' : 'Participante' }}
-                  <span v-if="pessoa.id === sala.hostId">· Host</span>
-                </small>
-                <span class="mt-2 text-[0.72rem]" :class="pessoa.votou ? 'text-[#8bdfbe]' : 'text-[#a4adc4]'">
-                  {{ sala.status === 'revelada' ? (pessoa.votou ? `Voto: ${sala.room.votacao.votos[pessoa.id]}` : 'Não votou') : (pessoa.votou ? '✓ Votou' : '◷ Aguardando') }}
-                </span>
-              </div>
-                <BotaoBase v-if="sala.ehHost && pessoa.id !== sala.hostId"
-                  variante="icon" tamanho="icon" type="button"
-                  :title="`Transferir host para ${pessoa.name}`"
-                  :aria-label="`Transferir host para ${pessoa.name}`"
-                  :disabled="sala.pending || !sala.connected || sala.restoring"
-                  @click="transferirHost(pessoa)">
-                  <ArrowRightLeft :size="16" aria-hidden="true" />
-                </BotaoBase>
-            </li>
-          </ul>
-          <p class="border-t border-line pt-[18px] text-[0.73rem] [@media(max-width:700px)]:pt-3">
-            Participantes e votos são sincronizados em tempo real.
-          </p>
-        </aside>
-        <section class="rounded-[22px] border border-line bg-surface shadow-[0_20px_70px_#00000020] p-8 [@media(max-width:1000px)]:p-6 [@media(max-width:700px)]:px-5" aria-labelledby="titulo-votacao">
-          <header class="flex items-center justify-between gap-5 [&_h2]:mb-2 [&_h2]:text-2xl [&_p]:text-[0.85rem] [@media(max-width:1000px)]:flex-col [@media(max-width:1000px)]:items-start">
+          <div class="round-control">
+            <p v-if="!sala.ehHost" role="status">{{ sala.status === 'aguardando' ? 'Aguardando o host iniciar.' : sala.status === 'votando' ? 'Aguardando revelação.' : 'Votos revelados.' }}</p>
+            <BotaoBase v-if="sala.ehHost" type="button" variante="primary"
+              :disabled="sala.pending || !sala.connected || sala.restoring"
+              @click="sala.status === 'votando' ? sala.revelarVotos() : sala.iniciarVotacao()">
+              <component :is="sala.status === 'votando' ? Eye : sala.status === 'revelada' ? RotateCcw : Play" :size="16" aria-hidden="true" />
+              {{ sala.status === 'votando' ? 'Revelar votos' : sala.status === 'revelada' ? 'Nova rodada' : 'Iniciar votação' }}
+            </BotaoBase>
+          </div>
+
+        </section>
+        <section class="voting-deck panel" aria-labelledby="titulo-votacao">
+          <header class="voting-deck__header">
             <div>
               <span class="mb-3 block text-[0.68rem] font-bold tracking-[0.16em] text-accent">SUA ESTIMATIVA</span>
               <h2 id="titulo-votacao">Escolha uma carta</h2>
@@ -136,20 +162,22 @@ async function copiarCodigo() {
             </div>
             <BotaoBase
               v-if="sala.ehHost"
-
-              variante="quiet"
+              class="voting-deck__settings"
+              variante="icon"
+              tamanho="icon"
               type="button"
-              disabled title="Disponível em uma próxima etapa"
+              aria-label="Configurações da sala — disponível em uma próxima etapa"
+              disabled title="Configurações — disponível em uma próxima etapa"
             >
-              <Settings :size="16" aria-hidden="true" /> Configurações
+              <Settings :size="16" aria-hidden="true" />
             </BotaoBase>
           </header>
-          <div class="mt-[38px] mb-[30px] grid grid-cols-5 gap-[14px] [@media(max-width:1000px)]:grid-cols-3 [@media(max-width:700px)]:mt-7 [@media(max-width:700px)]:gap-3" role="group" aria-label="Cartas de estimativa">
+          <div class="voting-deck__cards" role="group" aria-label="Cartas de estimativa">
             <button
               v-for="carta in sala.cartas"
               :key="carta"
               type="button"
-              class="relative flex min-h-[135px] min-w-0 flex-col items-center justify-center gap-2.5 rounded-[13px] border px-2 pt-[30px] pb-[18px] [overflow-wrap:anywhere] transition-[transform,background,border-color] duration-150 hover:-translate-y-[5px] motion-reduce:transition-none [&_strong]:max-w-full [&_strong]:text-[1.9rem] [&_strong]:font-semibold [@media(max-width:700px)]:min-h-[120px]"
+              class="voting-deck__card relative flex min-h-[64px] min-w-0 flex-col items-center justify-center gap-1 rounded-[10px] border px-2 py-2 [overflow-wrap:anywhere] transition-[transform,background,border-color] duration-150 hover:-translate-y-[5px] motion-reduce:transition-none [&_strong]:max-w-full [&_strong]:text-[1.3rem] [&_strong]:font-semibold"
               :aria-label="`Carta ${carta}`"
               :class="sala.meuVoto === carta ? '-translate-y-[5px] border-[#d7c9ff] bg-accent text-[#241735] shadow-[0_8px_24px_#a582ff22]' : 'border-[#414961] bg-[linear-gradient(145deg,#242838,#1a1e2b)] text-[#d2d7ea] hover:border-[#a28ace]'"
               :aria-pressed="sala.meuVoto === carta"
@@ -160,23 +188,69 @@ async function copiarCodigo() {
               <span class="text-[0.85rem] opacity-55" aria-hidden="true">♠</span>
             </button>
           </div>
-          <div class="flex items-center justify-between gap-4 border-t border-line pt-6 [&_p]:text-[0.8rem] [@media(max-width:700px)]:flex-col [@media(max-width:700px)]:items-stretch">
-            <p role="status">{{ sala.status === 'aguardando' ? 'Aguardando o host iniciar.' : sala.status === 'votando' ? 'Votação em andamento. Você pode alterar sua carta.' : 'Votos revelados.' }}</p>
-            <BotaoBase v-if="sala.ehHost" type="button" variante="primary"
-              :disabled="sala.pending || !sala.connected || sala.restoring"
-              @click="sala.status === 'votando' ? sala.revelarVotos() : sala.iniciarVotacao()">
-              <component :is="sala.status === 'votando' ? Eye : sala.status === 'revelada' ? RotateCcw : Play" :size="16" aria-hidden="true" />
-              {{ sala.status === 'votando' ? 'Revelar votos' : sala.status === 'revelada' ? 'Nova votação' : 'Iniciar votação' }}
-            </BotaoBase>
-          </div>
-          <p v-if="sala.resultado" class="mt-6 text-[0.72rem]" role="status">
+          <p v-if="sala.resultado" class="voting-deck__note" role="status">
             {{ sala.resultado.quantidade }} voto(s).
             Média numérica: {{ sala.resultado.media === null ? '—' : sala.resultado.media.toLocaleString('pt-BR', { maximumFractionDigits: 2 }) }}.
           </p>
-          <p v-else class="mt-6 text-[0.72rem]">Os votos permanecem privados até o host revelar.</p>
+          <p v-else class="voting-deck__note">Seu voto é visível para você. Os demais só o verão após a revelação.</p>
           <MensagemErro v-if="sala.error">{{ sala.error.message }}</MensagemErro>
         </section>
       </div>
     </template>
   </main>
 </template>
+
+<style scoped>
+.room-intro .mb-3 { margin-bottom: 6px; }
+.room-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-areas: 'deck table';
+  align-items: start;
+  gap: 20px;
+  min-width: 0;
+}
+.voting-deck { position: relative; grid-area: deck; min-width: 0; padding: 16px; }
+.voting-deck__settings { position: absolute; top: 8px; right: 8px; }
+.voting-deck__header { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.voting-deck__header h2 { margin-bottom: 4px; font-size: 1.15rem; }
+.voting-deck__header p { font-size: .8rem; }
+.voting-deck__header .mb-3 { margin-bottom: 4px; padding-right: 28px; }
+.voting-deck__note { margin-top: 6px; font-size: .68rem; color: #969db2; line-height: 1.5; }
+.poker-table { grid-area: table; min-width: 0; display: grid; grid-template-areas: 'top' 'center' 'bottom'; gap: 16px; padding: 12px; border: 1px solid #514367; border-radius: 32px; background: radial-gradient(ellipse at center, #302842, #181b29 75%); box-shadow: inset 0 0 0 7px #ffffff03, 0 20px 70px #00000020; }
+.poker-table__rail { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 20px; min-width: 0; }
+.poker-table__rail--top { grid-area: top; }
+.poker-table__rail--bottom { grid-area: bottom; }
+.poker-table__rail:empty { display: none; }
+.round-control {
+  grid-area: center;
+  justify-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: min(100%, 250px);
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1px solid #b9a4ff24;
+  border-radius: 14px;
+  background: #0c0e152e;
+  text-align: center;
+}
+.round-control p { font-size: .82rem; }
+.voting-deck__cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 12px 0 8px; }
+.voting-deck__card { width: 100%; }
+.voting-deck__card[aria-pressed='true']:disabled { opacity: 1; }
+@media (max-width: 900px) {
+  .room-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'table' 'deck'; gap: 16px; }
+  .voting-deck__cards { grid-template-columns: repeat(auto-fit, minmax(54px, 64px)); justify-content: center; }
+}
+@media (max-width: 700px) {
+  .poker-table { padding: 12px; gap: 16px; border-radius: 26px; }
+  .poker-table__rail { gap: 12px 8px; }
+  .round-control { min-height: 60px; }
+  .voting-deck__cards { gap: 10px; }
+
+}
+</style>

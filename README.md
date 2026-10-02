@@ -140,3 +140,43 @@ docker compose exec -T backend npm test
 ~~~
 
 Para iniciar o ambiente: docker compose up -d --build. Não é necessário excluir volumes. Confira Home e Sala em desktop e celular, incluindo foco por teclado, seleção de cartas, confirmação/cancelamento de transferência e estados de conexão.
+
+## Fase 4B — Reações em tempo real
+
+Ao passar o mouse, clicar/tocar ou focar a carta de outro participante, aparece uma pílula de reações rápidas: **👍 ❤️ 😂 😮 😢 🙏 [+]**. A própria carta não oferece seletor. O botão **+**, com o rótulo “Mostrar mais reações para <nome>”, abre um picker separado com busca em português, categorias e grade rolável. Não há biblioteca adicional.
+
+O catálogo `frontend/src/constants/catalogoEmojis.js` contém 60 itens `{ emoji, nome, categoria, palavrasChave }`, organizados em cinco categorias com 12 emojis cada: Emoções, Gestos, Corações, Festa e Diversão. `EMOJIS_RAPIDOS` define os seis atalhos padrão; `EMOJIS_PERMITIDOS` deriva os valores enviados. A busca combina nome/palavras-chave, ignora maiúsculas e acentos e pode ser filtrada por categoria. As opções anteriores, incluindo 💩, permanecem no catálogo.
+
+`usePreferenciasReacoes.js` personaliza as seis posições por frequência de uso e, em caso de empate, uso mais recente. Completa com os padrões sem repetir emojis. Persiste somente `{ emoji: { count, lastUsedAt } }` na chave local `planning-poker:preferencias-reacoes`, sem enviar preferências ao backend ou incluí-las na sala. Registra apenas o evento efetivamente emitido pelo servidor para uma reação do próprio participante: o acknowledgement de uma tentativa ignorada pelo cooldown não conta. Dados inválidos ou armazenamento indisponível retornam silenciosamente aos padrões. O balão acompanha a lista atualizada após a confirmação do envio, inclusive se já estiver aberto; o picker completo mantém os 60 emojis.
+
+`SeletorReacao.vue` renderiza somente a pílula rápida. `EmojiPickerPopover.vue` renderiza o picker completo: foco inicial na busca, Tab entre controles, setas/Home/End na grade, fechamento por seleção, clique fora, perda de foco para fora ou Esc. Esc e seleção devolvem o foco à carta. O picker completo permanece aberto ao mover o mouse entre a carta e o painel. Clicar em outra carta troca o alvo; hover não interrompe um picker completo aberto.
+
+`Sala.vue` mantém uma única referência local `{ participantId, modo: 'rapido' | 'completo' }`, ou `null`, garantindo apenas um popover aberto por vez. `CartaParticipante.vue` integra os componentes e emite `reagir(emoji)` sem acessar Socket.IO. Ao perder a sessão, desconectar, mudar de sala ou remover o alvo, o seletor é fechado.
+
+Os popovers são ancorados à carta com `Teleport` para o body e posicionamento fixo. `usePosicionamentoPopover.js` centraliza o painel na carta, prefere a lateral quando há espaço, ou escolhe acima/abaixo e limita posição, largura e altura à interseção entre mesa e viewport, com margem de 8 px. A grade possui scroll interno; não há scroll horizontal da página. ResizeObserver, resize e scroll recalculam o posicionamento. Todos os observers/listeners e o frame de foco são cancelados ao desmontar.
+
+O cliente envia `room:reaction` com `{ roomCode, targetParticipantId, emoji }`. O backend identifica o remetente por `socket.data`, valida a associação ao socket atual com `requireMember()`, sala, alvo, autorreação e allowlist. Emite o mesmo evento para todos na sala, inclusive o remetente, com `{ id, fromParticipantId, targetParticipantId, emoji }`; `id` é um UUID gerado no servidor. Não publica `room:state` nem altera votação, reveal ou host. Erros seguem `room:error` e acknowledgement `{ ok: false, error }`. `backend/src/reactionEmojis.js` mantém a allowlist exata dos 60 emojis: não aceita texto livre ou variantes fora da coleção.
+
+O cooldown de 700 ms continua em memória no backend: `Map<roomCode, Map<participantId, timestamp>>`. Trocar/reconectar o socket não reinicia o intervalo. Envios durante o cooldown recebem `{ ok: true }`, sem emissão e sem erro visual. Registros expirados são descartados no próximo envio válido; o mapa inteiro da sala é removido quando o último participante sai, inclusive após o prazo de desconexão. Não há timers de cooldown no backend.
+
+A store apenas envia e assina o evento. `useReacoes.js` mantém a lista visual temporária e um timer por reação. **A animação CSS dura 0,8 segundo: o emoji percorre um arco com giro, como uma bolinha de papel, atinge a carta em aproximadamente 0,58 segundo e desaparece nos 0,22 segundo seguintes.** A remoção do estado continua após 2 segundos, mas o elemento já fica transparente ao terminar a animação. Cada navegador calcula o trajeto entre as cartas localmente, sem enviar coordenadas. Reações simultâneas têm IDs e posições diferentes. `prefers-reduced-motion` usa apenas fade no alvo, sem deslocamento ou giro.
+
+O composable também controla o bloqueio visual de 700 ms, remove reações de alvos ausentes e limpa a lista/timers quando muda a sala, ocorre desconexão ou a sessão é perdida. Ao desmontar, cancela todos os timers e remove sua assinatura Socket.IO. Reações não entram em `room`, sessão, localStorage, banco ou histórico. Votação, nova rodada, reveal, host e Docker permanecem iguais.
+
+Validação automatizada, a partir do checkout completo:
+
+```sh
+npm --prefix backend test
+node --test frontend/test/*.test.js
+npm --prefix frontend run build
+```
+
+O teste de equivalência importa tanto o catálogo frontend quanto a allowlist backend; execute-o no checkout completo, pois os containers atuais montam cada serviço separadamente. Não é necessário alterar Docker.
+
+Resultado: 13 testes de backend e 13 de frontend passaram, além do build Vite. As verificações cobrem os 60 emojis, rejeição de texto livre, paridade do catálogo, busca sem acentos, categorias, limites de posicionamento em viewport estreito, cooldown, isolamento entre salas, identidade, autorreação, lista simultânea, remoção aos 2 segundos e cleanup. Os testes de preferência cobrem ordenação/complemento, desempate, persistência, armazenamento inválido/indisponível e registro apenas após emissão aceita. As regressões existentes de votação/reveal/transferência continuam passando.
+
+Na validação da preferência no navegador, uma reação recebida da outra identidade manteve os padrões; o envio próprio de 💩 colocou o emoji na primeira posição na próxima abertura e preservou essa ordem após recarregar a página.
+
+Validação no navegador integrado com Jane e Viviane: pílula rápida, abertura pelo +, foco na busca, pesquisa “coracao azul”, categorias, setas, envio recebido pelas duas identidades, permanência visível após 1,1 segundo e remoção aos 2 segundos, fechamento por seleção/clique fora/Esc e retorno de foco. Um terceiro participante confirmou a troca de alvo com apenas um seletor aberto. O picker apresentou scroll interno, ficou dentro da mesa e não gerou scroll horizontal. A segunda identidade utilizou uma entrada temporária de QA com WebSocket em outra origem, removida após o teste; nenhuma configuração de produção foi alterada. A conferência em celular/touch real continua pendente; os limites de viewport estreito são cobertos por testes de geometria.
+
+O fechamento por hover considera uma área contínua entre carta e pílula, incluindo o espaço de 8 px. Uma ponte transparente e a verificação de posição do ponteiro permitem atravessar essa área devagar sem fechar o balão. O balão rápido permanece aberto após escolher uma reação e fecha ao sair da área conjunta; clique fora e Esc continuam disponíveis. O picker expandido fecha após a seleção. O listener de pointermove é removido quando a pílula desmonta. O teste de regressão cobre o espaço acima/abaixo da carta; no navegador, uma pausa no espaço seguida de clique enviou 👍 corretamente.

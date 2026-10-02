@@ -86,3 +86,35 @@ test('iniciar votação após receber a sala não repete inicialização nem dis
     socket.disconnect()
   }
 })
+
+test('reação usa payload mínimo sem bloquear votação e assinatura pode ser removida', async () => {
+  socket.disconnect()
+  setActivePinia(createPinia())
+  const sala = useSalaStore()
+  const id = sala.participantId
+  sala.room = { code: 'ABCDEF', hostId: id, participants: [{ id, name: 'Jane' }], config: { cards: [3] }, votacao: { status: 'votando', votos: {} } }
+  sala.pending = true
+  socket.connected = true
+  const originalTimeout = socket.timeout
+  const sent = []
+  socket.timeout = () => ({ emitWithAck: async (event, payload) => { sent.push({ event, payload }); return { ok: true } } })
+  let received
+  const stop = sala.assinarReacoes(value => { received = value })
+  try {
+    assert.equal(await sala.enviarReacao('viviane', '😂'), true)
+    assert.deepEqual(sent, [{ event: 'room:reaction', payload: { roomCode: 'ABCDEF', targetParticipantId: 'viviane', emoji: '😂' } }])
+    assert.equal(sala.pending, true)
+    assert.equal('reacoesAtivas' in sala.$state, false)
+    const reaction = { id: '1', fromParticipantId: id, targetParticipantId: 'viviane', emoji: '😂' }
+    socket.listeners('room:reaction').forEach(listener => listener(reaction))
+    assert.equal(received, reaction)
+    stop()
+    assert.equal(socket.listeners('room:reaction').length, 0)
+  } finally {
+    stop()
+    socket.timeout = originalTimeout
+    socket.connected = false
+    socket.removeAllListeners()
+    socket.disconnect()
+  }
+})

@@ -1,7 +1,9 @@
 const { createRoomRepository, RoomError, projectRoom } = require('./rooms');
+const { createReactionService } = require('./reactions');
 
 function registerRoomEvents(io, repository = createRoomRepository(), { reconnectGraceMs = 60000 } = {}) {
     const departures = new Map();
+    const reactions = createReactionService(repository);
     const key = (code, id) => `${code}:${id}`;
     function cancelDeparture(code, id) {
         const entry = key(code, id);
@@ -9,6 +11,7 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
         departures.delete(entry);
     }
     function publish(room) {
+        if (!room.participants.length) reactions.clearRoom(room.code);
         for (const person of room.participants) {
             io.to(person.socketId).emit('room:state', projectRoom(room, person.id));
         }
@@ -46,6 +49,12 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
                     } else {
                         const { roomCode, participantId } = socket.data;
                         if (!roomCode) throw new RoomError('NOT_IN_ROOM', 'Entre na sala antes de realizar esta ação.');
+                        if (action === 'reaction') {
+                            const reaction = reactions.send(roomCode, participantId, socket.id, data);
+                            if (reaction) io.to(roomCode).emit('room:reaction', reaction);
+                            if (typeof acknowledge === 'function') acknowledge({ ok: true });
+                            return;
+                        }
                         if (data?.roomCode !== roomCode || data?.participantId !== participantId) {
                             throw new RoomError('INVALID_PARTICIPANT_ID', 'A ação deve usar a identidade e sala desta conexão.');
                         }
@@ -79,6 +88,7 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
         socket.on('room:start-voting', handle('startVoting'));
         socket.on('room:vote', handle('vote'));
         socket.on('room:reveal-votes', handle('revealVotes'));
+        socket.on('room:reaction', handle('reaction'));
         socket.on('disconnect', () => {
             const { roomCode, participantId } = socket.data;
             if (!roomCode) return;

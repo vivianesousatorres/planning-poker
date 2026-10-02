@@ -6,6 +6,27 @@ const { Server } = require('socket.io');
 const { io: connect } = require('socket.io-client');
 const { createRoomRepository } = require('../src/rooms');
 const { registerRoomEvents } = require('../src/socket');
+const { createReactionService } = require('../src/reactions');
+
+test('cooldown segue sala/participante na troca de socket e permite limpeza da sala', () => {
+    const repository = createRoomRepository();
+    const id = randomUUID(), target = randomUUID();
+    const room = repository.create({ participantId: id, name: 'Jane' }, 'old');
+    repository.join({ roomCode: room.code, participantId: target, name: 'Viviane' }, 'target');
+    let now = 0;
+    const service = createReactionService(repository, () => now);
+    const data = { roomCode: room.code, targetParticipantId: target, emoji: '😂' };
+    assert.ok(service.send(room.code, id, 'old', data));
+    repository.join({ roomCode: room.code, participantId: id, name: 'Jane' }, 'new');
+    assert.throws(() => service.send(room.code, id, 'old', data), { code: 'NOT_IN_ROOM' });
+    assert.equal(service.send(room.code, id, 'new', data), null);
+    now = 699;
+    assert.equal(service.send(room.code, id, 'new', data), null);
+    now = 700;
+    assert.ok(service.send(room.code, id, 'new', data));
+    service.clearRoom(room.code);
+    assert.ok(service.send(room.code, id, 'new', data));
+});
 
 test('validação, unicidade de códigos, nomes e reentrada por identidade', () => {
     const rooms = createRoomRepository();
@@ -299,4 +320,51 @@ test('mesmo cliente Socket.IO reconecta e mantém voto após o prazo original de
     await host.send('room:reveal-votes');
     assert.equal(host.state.votacao.votos[guest.id], 3);
     assert.equal(host.state.participants.length, 2);
+});
+
+test('reações sincronizam somente a sala em qualquer fase, sem modificar votação ou host', async t => {
+    const { host, guest, client } = await setup(t);
+    const outsider = await client();
+    await outsider.send('room:create', { name: 'Outra sala' });
+    const data = { targetParticipantId: guest.id, emoji: '😂' };
+    const original = structuredClone(host.state);
+    const received = [host, guest].map(c => next(c.socket, 'room:reaction'));
+    assert.equal((await host.send('room:reaction', { ...data, participantId: outsider.id })).ok, true);
+    const [a, b] = await Promise.all(received);
+    assert.deepEqual(a, b);
+    assert.deepEqual(Object.keys(a).sort(), ['emoji', 'fromParticipantId', 'id', 'targetParticipantId']);
+    assert.equal(a.fromParticipantId, host.id);
+    assert.deepEqual(host.state, original);
+    assert.equal((await host.send('room:reaction', data)).ok, true);
+    assert.equal(host.packets.filter(p => p.event === 'room:reaction').length, 1);
+    const reverse = next(host.socket, 'room:reaction', r => r.fromParticipantId === guest.id);
+    await guest.send('room:reaction', { targetParticipantId: host.id, emoji: '💩' });
+    assert.notEqual((await reverse).id, a.id);
+    for (const emoji of ['x', '<script>', '❤', null, {}]) {
+        assert.equal((await host.send('room:reaction', { ...data, emoji })).error.code, 'INVALID_EMOJI');
+    }
+    assert.equal((await host.send('room:reaction', { ...data, targetParticipantId: host.id })).error.code, 'SELF_REACTION');
+    assert.equal((await host.send('room:reaction', { ...data, targetParticipantId: outsider.id })).error.code, 'PARTICIPANT_NOT_FOUND');
+    assert.equal((await host.send('room:reaction', { ...data, roomCode: outsider.state.code })).error.code, 'NOT_IN_ROOM');
+    const unattached = await client();
+    assert.equal((await unattached.send('room:reaction', { ...data, roomCode: host.state.code })).error.code, 'NOT_IN_ROOM');
+    await host.send('room:start-voting');
+    await host.send('room:vote', { card: 5 });
+    await guest.send('room:vote', { card: 3 });
+    for (const phase of ['votando', 'revelada']) {
+        await new Promise(resolve => setTimeout(resolve, 710));
+        if (phase === 'revelada') await host.send('room:reveal-votes');
+        const before = structuredClone(host.state);
+        const event = next(guest.socket, 'room:reaction');
+        await host.send('room:reaction', { ...data, emoji: '🔥' });
+        await event;
+        assert.deepEqual(host.state, before);
+    }
+    const transferred = next(guest.socket, 'room:state', s => s.hostId === guest.id);
+    await host.send('room:transfer-host', { targetParticipantId: guest.id });
+    await transferred;
+    assert.equal((await guest.send('room:start-voting')).ok, true);
+    assert.equal(outsider.packets.some(p => p.event === 'room:reaction'), false);
+    await guest.send('room:leave');
+    assert.equal((await host.send('room:reaction', data)).error.code, 'PARTICIPANT_NOT_FOUND');
 });
