@@ -123,6 +123,7 @@ function estiloReacao(reacao, indice) {
     </div>
     <strong class="participant-card__name" :title="pessoa.name">{{ pessoa.name }}</strong>
     <small>{{ atual ? 'Você' : 'Participante' }}<span v-if="host"> · Host</span></small>
+    <span v-if="pessoa.online === false" class="text-xs text-amber-300" role="status">Offline</span>
     <span class="participant-card__status">{{ pessoa.votou ? (revelada ? 'Revelado' : '✓ Votou') : (revelada ? 'Não votou' : 'Aguardando') }}</span>
     <SeletorReacao v-if="!atual && seletorAberto" :nome="pessoa.name" :participant-id="pessoa.id" :ancora="carta"
       :emojis="emojisRapidos"

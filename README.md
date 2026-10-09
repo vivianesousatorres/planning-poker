@@ -95,6 +95,14 @@ Os testes usam `node:test`, um servidor Socket.IO em porta temporária e cliente
 
 ## Roteiro de votação e recuperação
 
+Ao desconectar, o participante permanece na sala com `online: false` e a carta
+exibe **Offline**. O servidor publica a mudança em `room:state` para os demais,
+preservando o voto e o host durante os 60 segundos de reconexão. A reentrada
+com a mesma identidade e credencial restaura `online: true` e cancela a remoção.
+Sem reentrada nesse prazo, o participante e seu voto são removidos e todos
+recebem o estado atualizado. Se era o host, o primeiro participante restante
+assume, seguindo a regra existente. Sair explicitamente continua sendo imediato.
+
 1. Com host e convidado em contextos distintos, inicie a votação pelo host. O convidado não deve ter controles administrativos.
 2. Vote 3 e depois 5: apenas 5 permanece selecionado. Teste também zero e 0.5.
 3. Inspecione `room:state` no convidado: o voto do host não pode aparecer em `votacao.votos`; apenas seu indicador `votou` é público. A lista de cartas configuradas é pública por definição.

@@ -36,7 +36,7 @@ function createRoomRepository() {
                 code,
                 hostId: participant.id,
                 votacao: { status: 'aguardando', votos: {}, roundId: 0 },
-                participants: [{ ...participant, socketId }],
+                participants: [{ ...participant, socketId, online: true }],
                 config: { cards: [...new Set(cards)] },
             };
             rooms.set(code, room);
@@ -55,8 +55,15 @@ function createRoomRepository() {
                 person.name.toLowerCase() === participant.name.toLowerCase())) {
                 throw new RoomError('DUPLICATE_NAME', 'Já existe um participante com esse nome na sala.');
             }
-            if (existing) Object.assign(existing, participant, { socketId });
-            else room.participants.push({ ...participant, socketId });
+            if (existing) Object.assign(existing, participant, { socketId, online: true });
+            else room.participants.push({ ...participant, socketId, online: true });
+            return room;
+        },
+        disconnect(code, participantId, socketId) {
+            const room = rooms.get(code);
+            const person = room?.participants.find(p => p.id === participantId && p.socketId === socketId);
+            if (!person) return null;
+            person.online = false;
             return room;
         },
         // Lifecycle: socket ownership protects reassociations from stale disconnects.
@@ -126,12 +133,12 @@ function createRoomRepository() {
 // Never serialize the internal room: every recipient gets an explicit allowlist.
 function projectRoom(room, recipientId) {
     const votos = {};
-    const participants = room.participants.map(({ id, name }) => {
+    const participants = room.participants.map(({ id, name, online }) => {
         const votou = Object.hasOwn(room.votacao.votos, id);
         if (votou && (room.votacao.status === 'revelada' || id === recipientId)) {
             votos[id] = room.votacao.votos[id];
         }
-        return { id, name, votou };
+        return { id, name, online, votou };
     });
     return {
         code: room.code, hostId: room.hostId, participants,

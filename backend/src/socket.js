@@ -103,6 +103,9 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
         socket.on('disconnect', () => {
             const { roomCode, participantId } = socket.data;
             if (!roomCode) return;
+            const disconnectedRoom = repository.disconnect(roomCode, participantId, socket.id);
+            if (!disconnectedRoom) return;
+            publish(disconnectedRoom);
             cancelDeparture(roomCode, participantId);
             const timer = setTimeout(() => {
                 departures.delete(key(roomCode, participantId));

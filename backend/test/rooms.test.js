@@ -415,7 +415,7 @@ test('votação: autorização, privacidade de todos os payloads, alteração, e
                 assert.deepEqual(Object.keys(state).sort(), ['code', 'config', 'hostId', 'participants', 'votacao']);
                 assert.deepEqual(Object.keys(state.votacao).sort(), ['roundId', 'status', 'votos']);
                 assert.ok(Object.keys(state.votacao.votos).every(id => id === c.id));
-                for (const p of state.participants) assert.deepEqual(Object.keys(p).sort(), ['id', 'name', 'votou']);
+                for (const p of state.participants) assert.deepEqual(Object.keys(p).sort(), ['id', 'name', 'online', 'votou']);
             } else {
                 assert.ok(['ack', 'room:error'].includes(event));
                 assert.equal(JSON.stringify(args).includes('votos'), false);
@@ -443,9 +443,17 @@ test('ciclo de vida: reconexão preserva voto, socket antigo não remove, saída
     const code = host.state.code;
     await host.send('room:start-voting');
     await host.send('room:vote', { card: 5 });
+    const offline = next(guest.socket, 'room:state', state => state.participants.find(p => p.id === host.id)?.online === false);
     host.socket.disconnect();
+    const disconnected = await offline;
+    assert.equal(disconnected.hostId, host.id);
+    assert.equal(disconnected.participants.find(p => p.id === host.id).votou, true);
+    assert.equal(disconnected.votacao.votos[host.id], undefined);
     const restored = await client(host.id);
+    const online = next(guest.socket, 'room:state', state => state.participants.find(p => p.id === host.id)?.online === true);
     await restored.send('room:join', { roomCode: code, name: 'Host' });
+    assert.equal((await online).hostId, host.id);
+    assert.equal(restored.state.participants.find(p => p.id === host.id).online, true);
     assert.equal(restored.state.hostId, host.id);
     assert.equal(restored.state.votacao.votos[host.id], 5);
     assert.equal(restored.state.participants.length, 2);
@@ -471,7 +479,9 @@ test('abandono após tolerância remove voto e transfere host; sala vazia é des
     await host.send('room:start-voting');
     await host.send('room:vote', { card: 5 });
     const updated = next(guest.socket, 'room:state', state => state.participants.length === 1);
+    const offline = next(guest.socket, 'room:state', state => state.participants.find(p => p.id === host.id)?.online === false);
     host.socket.disconnect();
+    assert.equal((await offline).hostId, host.id);
     const remaining = await updated;
     assert.equal(remaining.hostId, guest.id);
     assert.equal(remaining.participants.length, 1);
@@ -491,6 +501,8 @@ test('repositório ignora remoção por socket antigo e valida sala inexistente'
     repo.vote(room.code, participantId, 'old', 0.5);
     repo.join({ participantId, participantToken: tokenFor(participantId), name: 'Host', roomCode: room.code }, 'new');
     assert.equal(repo.remove(room.code, participantId, 'old'), null);
+    assert.equal(repo.disconnect(room.code, participantId, 'old'), null);
+    assert.equal(room.participants[0].online, true);
     assert.equal(room.votacao.votos[participantId], 0.5);
     assert.throws(() => repo.vote('ABSENT', participantId, 'new', 1), { code: 'ROOM_NOT_FOUND' });
 });
@@ -503,11 +515,15 @@ test('mesmo cliente Socket.IO reconecta e mantém voto após o prazo original de
     await host.send('room:start-voting');
     await guestOpening;
     await guest.send('room:vote', { card: 0.5 });
+    const offline = next(host.socket, 'room:state', s => s.participants.find(p => p.id === guest.id)?.online === false);
     guest.socket.disconnect();
+    assert.equal((await offline).participants.find(p => p.id === guest.id).votou, true);
+    const online = next(host.socket, 'room:state', s => s.participants.find(p => p.id === guest.id)?.online === true);
     const connected = next(guest.socket, 'connect');
     guest.socket.connect();
     await connected;
     await guest.send('room:join', { roomCode: code, name: 'Guest' });
+    await online;
     assert.equal(guest.state.votacao.votos[guest.id], 0.5);
     await new Promise(resolve => setTimeout(resolve, 250));
     assert.equal((await guest.send('room:vote', { card: 3 })).ok, true);
