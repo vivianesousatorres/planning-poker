@@ -1,0 +1,653 @@
+{
+  "durationMs": 180274,
+  "batches": 361,
+  "roomsCreated": 1083,
+  "clientsCreated": 7581,
+  "reactionsReceived": 27075,
+  "reconnections": 2166,
+  "graceMs": 75,
+  "samples": [
+    {
+      "batch": 5,
+      "elapsedMs": 2359,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 77004800,
+      "heapTotal": 31498240,
+      "heapUsed": 12560256,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 20,
+      "elapsedMs": 9860,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 80990208,
+      "heapTotal": 48275456,
+      "heapUsed": 12811528,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 40,
+      "elapsedMs": 19707,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 82370560,
+      "heapTotal": 48799744,
+      "heapUsed": 13117904,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 60,
+      "elapsedMs": 29487,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 82866176,
+      "heapTotal": 49324032,
+      "heapUsed": 13179032,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 80,
+      "elapsedMs": 39116,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 82993152,
+      "heapTotal": 49324032,
+      "heapUsed": 13186936,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 100,
+      "elapsedMs": 49129,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 82968576,
+      "heapTotal": 48799744,
+      "heapUsed": 13204352,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 120,
+      "elapsedMs": 58825,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 83353600,
+      "heapTotal": 49061888,
+      "heapUsed": 13228112,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 140,
+      "elapsedMs": 68582,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 83357696,
+      "heapTotal": 48799744,
+      "heapUsed": 13238880,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 160,
+      "elapsedMs": 78288,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 83156992,
+      "heapTotal": 48799744,
+      "heapUsed": 13247384,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 180,
+      "elapsedMs": 87935,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 84021248,
+      "heapTotal": 48799744,
+      "heapUsed": 13265024,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 200,
+      "elapsedMs": 97451,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 83619840,
+      "heapTotal": 48799744,
+      "heapUsed": 13251952,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 220,
+      "elapsedMs": 107687,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 92938240,
+      "heapTotal": 49061888,
+      "heapUsed": 13272816,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 240,
+      "elapsedMs": 117933,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93409280,
+      "heapTotal": 49324032,
+      "heapUsed": 13295080,
+      "external": 4311544,
+      "arrayBuffers": 294029
+    },
+    {
+      "batch": 260,
+      "elapsedMs": 128204,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93134848,
+      "heapTotal": 49061888,
+      "heapUsed": 12980424,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 280,
+      "elapsedMs": 138478,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93921280,
+      "heapTotal": 49324032,
+      "heapUsed": 12993696,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 300,
+      "elapsedMs": 148912,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93499392,
+      "heapTotal": 49586176,
+      "heapUsed": 13009616,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 320,
+      "elapsedMs": 159317,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93782016,
+      "heapTotal": 49061888,
+      "heapUsed": 13010568,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 340,
+      "elapsedMs": 169513,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93790208,
+      "heapTotal": 49324032,
+      "heapUsed": 13013264,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 360,
+      "elapsedMs": 179576,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93921280,
+      "heapTotal": 49586176,
+      "heapUsed": 13012832,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    },
+    {
+      "batch": 361,
+      "elapsedMs": 180274,
+      "rooms": 0,
+      "sockets": 0,
+      "connections": 0,
+      "adapterRooms": 0,
+      "departureTimers": 0,
+      "listeners": [
+        {
+          "connection": 1,
+          "listening": 2,
+          "close": 1,
+          "upgrade": 1,
+          "request": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        },
+        {
+          "connection": 1
+        }
+      ],
+      "rss": 93794304,
+      "heapTotal": 49586176,
+      "heapUsed": 13008144,
+      "external": 4311530,
+      "arrayBuffers": 294015
+    }
+  ],
+  "heapDeltaBytes": 447888,
+  "rssDeltaBytes": 16789504
+}

@@ -19,6 +19,10 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
     io.on('connection', socket => {
         function handle(action) {
             return async (data, acknowledge) => {
+                if (typeof data === 'function' && acknowledge === undefined) {
+                    acknowledge = data;
+                    data = undefined;
+                }
                 try {
                     const joining = action === 'create' || action === 'join';
                     let room;
@@ -58,6 +62,12 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
                         if (data?.roomCode !== roomCode || data?.participantId !== participantId) {
                             throw new RoomError('INVALID_PARTICIPANT_ID', 'A ação deve usar a identidade e sala desta conexão.');
                         }
+                        if (['vote', 'startVoting', 'revealVotes', 'configureDeck'].includes(action)) {
+                            const current = repository.requireMember(roomCode, participantId, socket.id);
+                            if (!Number.isInteger(data?.roundId) || data.roundId !== current.votacao.roundId) {
+                                throw new RoomError('STALE_ROUND', 'A rodada mudou. Confira o estado atual e tente novamente.');
+                            }
+                        }
                         if (action === 'leave') {
                             repository.requireMember(roomCode, participantId, socket.id);
                             cancelDeparture(roomCode, participantId);
@@ -67,7 +77,7 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
                             socket.emit('room:left');
                         } else if (action === 'transferHost') {
                             room = repository.transferHost(roomCode, participantId, socket.id, data?.targetParticipantId);
-                        } else room = repository[action](roomCode, participantId, socket.id, data?.card);
+                        } else room = repository[action](roomCode, participantId, socket.id, action === 'configureDeck' ? data?.cards : data?.card);
                     }
                     publish(room);
                     if (typeof acknowledge === 'function') acknowledge({ ok: true });
@@ -87,6 +97,7 @@ function registerRoomEvents(io, repository = createRoomRepository(), { reconnect
         socket.on('room:transfer-host', handle('transferHost'));
         socket.on('room:start-voting', handle('startVoting'));
         socket.on('room:vote', handle('vote'));
+        socket.on('room:configure-deck', handle('configureDeck'));
         socket.on('room:reveal-votes', handle('revealVotes'));
         socket.on('room:reaction', handle('reaction'));
         socket.on('disconnect', () => {

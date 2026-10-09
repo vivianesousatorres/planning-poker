@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { ArrowRightLeft } from 'lucide-vue-next'
 import BotaoBase from './BotaoBase.vue'
 import SeletorReacao from './SeletorReacao.vue'
@@ -12,7 +12,7 @@ const props = defineProps({
   atual: Boolean,
   host: Boolean,
   revelada: Boolean,
-  voto: Number,
+  voto: [Number, String],
   podeTransferir: Boolean,
   bloqueado: Boolean,
   reacoes: { type: Array, default: () => [] },
@@ -65,6 +65,25 @@ function sairDaCarta(event) {
   fechar('saida')
 }
 const mostrarValor = computed(() => props.pessoa.votou && props.revelada)
+const valor = ref(null)
+let observadorValor
+function ajustarValor() {
+  const elemento = valor.value
+  if (!elemento) return
+  elemento.style.fontSize = ''
+  const largura = elemento.parentElement.clientWidth - 12
+  const tamanho = parseFloat(getComputedStyle(elemento).fontSize)
+  if (elemento.scrollWidth > largura) {
+    elemento.style.fontSize = `${tamanho * largura / elemento.scrollWidth}px`
+  }
+}
+onMounted(() => {
+  observadorValor = new ResizeObserver(ajustarValor)
+  observadorValor.observe(valor.value.parentElement)
+  ajustarValor()
+})
+watch(() => [props.voto, mostrarValor.value], async () => { await nextTick(); ajustarValor() })
+onBeforeUnmount(() => observadorValor?.disconnect())
 function estiloReacao(reacao, indice) {
   const deslocamento = (indice % 3 - 1) * 14
   const x = reacao.trajeto?.x ?? 0
@@ -96,7 +115,7 @@ function estiloReacao(reacao, indice) {
     @keydown.tab="navegarParaReacoes"
     @keydown.esc.stop.prevent="fechar('escape')">
     <div class="participant-card__vote" :aria-label="mostrarValor ? `Voto: ${voto}` : pessoa.votou ? 'Voto oculto' : revelada ? 'Não votou' : 'Aguardando voto'">
-      <span aria-hidden="true">{{ mostrarValor ? voto : '♠' }}</span>
+      <span ref="valor" class="participant-card__value" aria-hidden="true">{{ mostrarValor ? voto : '♠' }}</span>
       <div class="participant-card__reactions" aria-hidden="true">
         <span v-for="(reacao, indice) in reacoes" :key="reacao.id" class="participant-card__reaction"
           :style="estiloReacao(reacao, indice)">{{ reacao.emoji }}</span>
@@ -139,7 +158,7 @@ function estiloReacao(reacao, indice) {
 }
 .participant-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; width: 124px; min-width: 0; text-align: center; }
 .participant-card__vote { position: relative; display: grid; place-items: center; width: 64px; min-height: 74px; padding: 6px; border: 1px solid #55546c; border-radius: 12px; background: linear-gradient(145deg, #292b3e, #191c2b); color: #9da3bb; font-size: 1.65rem; font-weight: 700; overflow-wrap: anywhere; }
-.participant-card__vote span { min-width: 0; max-width: 100%; }
+.participant-card__value { min-width: 0; max-width: 100%; white-space: nowrap; line-height: 1; }
 .participant-card--voted .participant-card__vote { border-color: #a88ce9; background: #3a2e53; color: #e0d4ff; }
 .participant-card--revealed .participant-card__vote { background: #c7b5ff; color: #241735; }
 .participant-card--current .participant-card__vote { outline: 2px solid #b9a4ff; outline-offset: 4px; }

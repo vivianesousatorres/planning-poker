@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { socket } from '../services/socket.js'
 import { useParticipanteStore } from './participante.js'
 
@@ -23,6 +23,7 @@ export const useSalaStore = defineStore('sala', {
     hostId: state => state.room?.hostId ?? null,
     cartas: state => state.room?.config.cards ?? [],
     status: state => state.room?.votacao.status ?? 'aguardando',
+    roundId: state => state.room?.votacao.roundId,
     meuVoto: state => state.room?.votacao.votos[useParticipanteStore().id],
     resultado: state => {
       if (state.room?.votacao.status !== 'revelada') return null
@@ -115,12 +116,17 @@ export const useSalaStore = defineStore('sala', {
         if (generation === this.generation) this.pending = false
       }
     },
-    createRoom(name, cards) { return this.enviar('room:create', { name, cards }) },
-    joinRoom(roomCode, name) { return this.enviar('room:join', { roomCode, name }) },
-    iniciarVotacao() { return this.enviar('room:start-voting', { roomCode: this.codigo }) },
-    votar(card) { return this.enviar('room:vote', { roomCode: this.codigo, card }) },
-    revelarVotos() { return this.enviar('room:reveal-votes', { roomCode: this.codigo }) },
+    createRoom(name, cards) { this.inicializar(); return this.enviar('room:create', { name, cards, participantToken: useParticipanteStore().token }) },
+    joinRoom(roomCode, name) { this.inicializar(); return this.enviar('room:join', { roomCode, name, participantToken: useParticipanteStore().token }) },
+    iniciarVotacao() { return this.enviar('room:start-voting', { roomCode: this.codigo, roundId: this.roundId }) },
+    votar(card) { return this.enviar('room:vote', { roomCode: this.codigo, roundId: this.roundId, card }) },
+    configurarCartas(cards) { return this.enviar('room:configure-deck', { roomCode: this.codigo, roundId: this.roundId, cards }) },
+    revelarVotos() { return this.enviar('room:reveal-votes', { roomCode: this.codigo, roundId: this.roundId }) },
     sair() { return this.enviar('room:leave', { roomCode: this.codigo }) },
     transferirHost(targetParticipantId) { return this.enviar('room:transfer-host', { roomCode: this.codigo, targetParticipantId }) },
   },
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useSalaStore, import.meta.hot))
+}

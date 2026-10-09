@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><title>Diagnóstico MutationObserver</title></head>
+<body>
+<section id="audit-controls">
+  <h1>Diagnóstico fora da automação</h1>
+  <p>Abra esta página diretamente em Chrome/Edge. O erro não é suprimido. Chamadas inválidas registram a pilha abaixo e continuam lançando a exceção original.</p>
+  <button id="frames">Recarregar a aplicação em iframe 20 vezes</button>
+  <p id="progress">Página principal carregada; observe também o console.</p>
+</section>
+<pre id="audit-errors">Nenhum erro capturado.</pre>
+<div id="app"></div>
+<script>
+  const auditUrl = location.href.split('?')[0];
+  const auditChild = new URLSearchParams(location.search).has('child');
+  const auditErrors = [];
+  function recordAudit(error) {
+    auditErrors.push(error);
+    document.querySelector('#audit-errors').textContent = JSON.stringify(auditErrors, null, 2);
+    if (auditChild) parent.postMessage({ planningPokerObserverAudit: error }, location.origin);
+  }
+  const nativeObserve = MutationObserver.prototype.observe;
+  MutationObserver.prototype.observe = function(target, options) {
+    try { return nativeObserve.call(this, target, options); }
+    catch (error) {
+      recordAudit({ kind: 'MutationObserver.observe', message: error.message, stack: error.stack,
+        caller: new Error('observe caller').stack, target: String(target), href: location.href });
+      throw error;
+    }
+  };
+  window.addEventListener('error', event => recordAudit({ kind: 'error', message: event.message,
+    stack: event.error?.stack, filename: event.filename, line: event.lineno }));
+  window.addEventListener('unhandledrejection', event => recordAudit({ kind: 'unhandledrejection',
+    message: String(event.reason), stack: event.reason?.stack }));
+  if (auditChild) document.querySelector('#audit-controls').hidden = true;
+  window.addEventListener('message', event => {
+    if (event.origin === location.origin && event.data?.planningPokerObserverAudit)
+      recordAudit({ frame: event.data.planningPokerObserverAudit });
+  });
+  document.querySelector('#frames').addEventListener('click', async function() {
+    this.disabled = true;
+    try {
+      for (let cycle = 1; cycle <= 20; cycle++) {
+        const frame = document.createElement('iframe');
+        frame.title = 'Planning Poker'; frame.width = '390'; frame.height = '720';
+        const loaded = new Promise((resolve, reject) => {
+          frame.onload = resolve; frame.onerror = reject;
+        });
+        frame.src = auditUrl + '?child=1'; document.body.append(frame);
+        await loaded; await new Promise(resolve => setTimeout(resolve, 300));
+        frame.remove();
+        document.querySelector('#progress').textContent = `${cycle}/20 ciclos concluídos; ${auditErrors.length} erros capturados.`;
+      }
+    } finally { this.disabled = false; }
+  });
+  // Restore a real app route before importing the unchanged application entry.
+  history.replaceState({}, '', '/');
+</script>
+<script type="module">import('/src/main.js').catch(error => recordAudit({ kind: 'import', message: error.message, stack: error.stack }));</script>
+</body></html>

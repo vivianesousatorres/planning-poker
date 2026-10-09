@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'planning-poker:participante-id'
+const TOKEN_KEY = 'planning-poker:participante-token'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 function gerarUuid() {
@@ -13,16 +14,19 @@ function gerarUuid() {
 }
 
 export const useParticipanteStore = defineStore('participante', {
-  state: () => ({ id: null, nome: '' }),
+  state: () => ({ id: null, token: null, nome: '' }),
   actions: {
     inicializar() {
-      if (this.id) return
+      if (this.id && this.token) return
       try {
         this.id = localStorage.getItem(STORAGE_KEY)
+        this.token = localStorage.getItem(TOKEN_KEY)
       } catch { /* Sem armazenamento, a identidade dura apenas nesta sessão. */ }
       this.id = UUID.test(this.id ?? '') ? this.id.toLowerCase() : gerarUuid()
+      this.token = UUID.test(this.token ?? '') ? this.token.toLowerCase() : gerarUuid()
       try {
         localStorage.setItem(STORAGE_KEY, this.id)
+        localStorage.setItem(TOKEN_KEY, this.token)
       } catch { /* O navegador pode bloquear o armazenamento. */ }
     },
   },

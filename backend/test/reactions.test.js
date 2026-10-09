@@ -1,6 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
+const tokens = new Map();
+function tokenFor(id) { if (!tokens.has(id)) tokens.set(id, randomUUID()); return tokens.get(id); }
 const { createRoomRepository } = require('../src/rooms');
 const { createReactionService } = require('../src/reactions');
 const { REACTION_EMOJIS } = require('../src/reactionEmojis');
@@ -8,8 +10,8 @@ const { REACTION_EMOJIS } = require('../src/reactionEmojis');
 test('todos os 60 emojis do catálogo são aceitos; texto livre continua rejeitado', () => {
     const repository = createRoomRepository();
     const id = randomUUID(), target = randomUUID();
-    const room = repository.create({ participantId: id, name: 'Jane' }, 'sender');
-    repository.join({ roomCode: room.code, participantId: target, name: 'Viviane' }, 'target');
+    const room = repository.create({ participantId: id, participantToken: tokenFor(id), name: 'Jane' }, 'sender');
+    repository.join({ roomCode: room.code, participantId: target, participantToken: tokenFor(target), name: 'Viviane' }, 'target');
     const before = structuredClone(room);
     let now = 0;
     const service = createReactionService(repository, () => now);

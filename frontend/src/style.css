@@ -22,7 +22,7 @@
   }
   body {
     margin: 0;
-    min-width: 320px;
+    min-width: 0;
     min-height: 100vh;
     background: radial-gradient(ellipse at 50% 0%, #211c3b80, transparent 65%);
   }

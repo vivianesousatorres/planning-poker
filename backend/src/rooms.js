@@ -1,6 +1,6 @@
 const { generateRoomCode } = require('./utils/roomCode');
 
-const DEFAULT_CARDS = [0, 0.5, 1, 2, 3, 5, 8, 13, 21];
+const { DEFAULT_CARDS, normalizeCards } = require('./deck');
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 class RoomError extends Error {
@@ -17,7 +17,10 @@ function validateParticipant(data) {
     if (typeof data.name !== 'string' || !data.name.trim() || data.name.trim().length > 60) {
         throw new RoomError('INVALID_NAME', 'Informe um nome com até 60 caracteres.');
     }
-    return { id: data.participantId.toLowerCase(), name: data.name.trim() };
+    if (typeof data.participantToken !== 'string' || !UUID.test(data.participantToken)) {
+        throw new RoomError('INVALID_SESSION', 'Credencial da sessão inválida.');
+    }
+    return { id: data.participantId.toLowerCase(), name: data.name.trim(), participantToken: data.participantToken.toLowerCase() };
 }
 
 function createRoomRepository() {
@@ -25,16 +28,14 @@ function createRoomRepository() {
     return {
         create(data, socketId) {
             const participant = validateParticipant(data);
-            const cards = data.cards === undefined ? DEFAULT_CARDS : data.cards;
-            if (!Array.isArray(cards) || !cards.length || cards.length > 100 ||
-                cards.some(card => typeof card !== 'number' || !Number.isFinite(card) || card < 0)) {
-                throw new RoomError('INVALID_CARDS', 'Informe de 1 a 100 cartas numéricas não negativas.');
-            }
+            let cards;
+            try { cards = normalizeCards(data.cards === undefined ? DEFAULT_CARDS : data.cards); }
+            catch (error) { throw new RoomError('INVALID_CARDS', error.message); }
             const code = generateRoomCode(rooms);
             const room = {
                 code,
                 hostId: participant.id,
-                votacao: { status: 'aguardando', votos: {} },
+                votacao: { status: 'aguardando', votos: {}, roundId: 0 },
                 participants: [{ ...participant, socketId }],
                 config: { cards: [...new Set(cards)] },
             };
@@ -46,11 +47,14 @@ function createRoomRepository() {
             const code = typeof data.roomCode === 'string' ? data.roomCode.trim().toUpperCase() : '';
             const room = rooms.get(code);
             if (!room) throw new RoomError('ROOM_NOT_FOUND', 'Sala não encontrada. Confira o código.');
+            const existing = room.participants.find(person => person.id === participant.id);
+            if (existing && existing.participantToken !== participant.participantToken) {
+                throw new RoomError('INVALID_SESSION', 'Não foi possível recuperar esta identidade.');
+            }
             if (room.participants.some(person => person.id !== participant.id &&
                 person.name.toLowerCase() === participant.name.toLowerCase())) {
                 throw new RoomError('DUPLICATE_NAME', 'Já existe um participante com esse nome na sala.');
             }
-            const existing = room.participants.find(person => person.id === participant.id);
             if (existing) Object.assign(existing, participant, { socketId });
             else room.participants.push({ ...participant, socketId });
             return room;
@@ -90,11 +94,23 @@ function createRoomRepository() {
             room.votacao.votos[participantId] = card;
             return room;
         },
+        configureDeck(code, participantId, socketId, input) {
+            const room = this.requireMember(code, participantId, socketId);
+            if (room.hostId !== participantId) throw new RoomError('HOST_ONLY', 'Somente o host pode realizar esta ação.');
+            let cards;
+            try { cards = normalizeCards(input); }
+            catch (error) { throw new RoomError('INVALID_CARDS', error.message); }
+            if (cards.length !== room.config.cards.length || cards.some((card, index) => card !== room.config.cards[index])) {
+                room.config.cards = cards;
+                room.votacao = { status: 'aguardando', votos: {}, roundId: room.votacao.roundId + 1 };
+            }
+            return room;
+        },
         startVoting(code, participantId, socketId) {
             const room = this.requireMember(code, participantId, socketId);
             if (room.hostId !== participantId) throw new RoomError('HOST_ONLY', 'Somente o host pode realizar esta ação.');
             if (room.votacao.status === 'votando') throw new RoomError('VOTING_OPEN', 'A votação já está aberta.');
-            room.votacao = { status: 'votando', votos: {} };
+            room.votacao = { status: 'votando', votos: {}, roundId: room.votacao.roundId + 1 };
             return room;
         },
         revealVotes(code, participantId, socketId) {
@@ -120,7 +136,7 @@ function projectRoom(room, recipientId) {
     return {
         code: room.code, hostId: room.hostId, participants,
         config: { cards: [...room.config.cards] },
-        votacao: { status: room.votacao.status, votos },
+        votacao: { status: room.votacao.status, votos, roundId: room.votacao.roundId },
     };
 }
 

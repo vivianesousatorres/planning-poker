@@ -26,7 +26,7 @@ O backend usa `nodemon --legacy-watch --watch src`, verificando alterações por
 - `backend/src/rooms.js`: Map privado de salas e validações de criação/entrada.
 - `backend/src/utils/roomCode.js`: códigos únicos de seis caracteres, sem 0, O, 1, I ou L.
 - `frontend/src/services/socket.js`: conexão Socket.IO existente.
-- `frontend/src/stores/participante.js`: UUID persistido na chave existente `planning-poker:participante-id`; o nome fica em memória. Identificadores antigos inválidos são substituídos por UUID. Com armazenamento bloqueado, a identidade dura apenas a sessão.
+- `frontend/src/stores/participante.js`: UUID persistido na chave existente `planning-poker:participante-id` e credencial privada em `planning-poker:participante-token`; o nome fica em memória. Identificadores antigos inválidos são substituídos por UUID. Com armazenamento bloqueado, a identidade dura apenas a sessão.
 - `frontend/src/stores/sala.js`: estado recebido do backend, conexão, erros, ações `createRoom`/`joinRoom` e getters `me`, `isHost`, `participants`, `participantId` e `participantName`. Os listeners são registrados uma vez por instância da store.
 - `frontend/src/views/Home.vue` e `Sala.vue`: telas existentes, nas rotas `/` e `/sala/:codigo`.
 
@@ -36,22 +36,22 @@ O backend usa `nodemon --legacy-watch --watch src`, verificando alterações por
 
 Home, Sala e ConfiguracaoSala reutilizam `CampoTexto` (label/input com `v-model` e slot para ajuda), `BotaoBase` (variantes primary, secondary e quiet) e `MensagemErro` (alerta acessível). `MarcaApp` e `StatusConexao` são compartilhados entre Home e Sala. Os componentes ficam em `frontend/src/components`, não acessam stores nem Socket.IO e preservam as classes CSS existentes. `CampoTexto` encaminha atributos como `required`, `maxlength`, `class` e `aria-describedby` ao input; `BotaoBase` usa `type="button"` por padrão e encaminha eventos e atributos ao botão nativo. Formulários informam explicitamente `type="submit"`.
 
-A tela chama a store, que envia `room:create` com `{ participantId, name, cards }`. O backend valida UUID, nome (1 a 60 caracteres após trim) e cartas (1 a 100 números finitos não negativos), gera o código, registra o criador como host e associa o socket à sala. Cartas omitidas usam `[0, 0.5, 1, 2, 3, 5, 8, 13, 21]`, preservando o conjunto existente; valores repetidos são removidos.
+A tela chama a store, que envia `room:create` com `{ participantId, participantToken, name, cards }`. O backend valida UUID, credencial privada, nome (1 a 60 caracteres após trim) e cartas (1 a 100 números não negativos ou rótulos válidos), gera o código, registra o criador como host e associa o socket à sala. Cartas omitidas usam `[0, 0.5, 1, 2, 3, 5, 8, 13, 21]`, preservando o conjunto existente; valores repetidos são rejeitados após normalização.
 
-Na entrada, a store envia `room:join` com `{ roomCode, participantId, name }`. O servidor normaliza o código, verifica a existência da sala e impede nomes duplicados ignorando maiúsculas/minúsculas e espaços nas extremidades. O mesmo ID pode reentrar: sua conexão e nome são atualizados sem duplicar o participante nem perder o papel de host. Um novo nome também passa pela verificação de duplicidade.
+Na entrada, a store envia `room:join` com `{ roomCode, participantId, participantToken, name }`. O servidor normaliza o código, verifica a existência da sala e impede nomes duplicados ignorando maiúsculas/minúsculas e espaços nas extremidades. O mesmo ID pode reentrar com a credencial privada correspondente: sua conexão e nome são atualizados sem duplicar o participante nem perder o papel de host. Um novo nome também passa pela verificação de duplicidade.
 
-Após cada operação válida, `room:state` entrega uma projeção individual da sala para cada socket associado. O objeto interno nunca é transmitido diretamente: `socketId` não é exposto, e votos de terceiros só aparecem após a revelação. O acknowledgement `{ ok: true }` confirma a operação sem carregar outro estado. Em falhas, o servidor envia `room:error` com `{ code, message }` e confirma `{ ok: false, error }`.
-O erro de nome duplicado é `DUPLICATE_NAME`, com a mensagem `Já existe um participante com esse nome na sala.`. Outros erros incluem `INVALID_PARTICIPANT_ID`, `INVALID_NAME`, `INVALID_CARDS` e `ROOM_NOT_FOUND`. A interface bloqueia envios durante uma operação e sem conexão, e trata timeout de oito segundos.
+Após cada operação válida, `room:state` entrega uma projeção individual da sala para cada socket associado. O objeto interno nunca é transmitido diretamente: `socketId` e `participantToken` não são expostos, e votos de terceiros só aparecem após a revelação. O acknowledgement `{ ok: true }` confirma a operação sem carregar outro estado. Em falhas, o servidor envia `room:error` com `{ code, message }` e confirma `{ ok: false, error }`.
+O erro de nome duplicado é `DUPLICATE_NAME`, com a mensagem `Já existe um participante com esse nome na sala.`. Outros erros incluem `INVALID_PARTICIPANT_ID`, `INVALID_SESSION`, `INVALID_NAME`, `INVALID_CARDS` e `ROOM_NOT_FOUND`. A interface bloqueia envios durante uma operação e sem conexão, e trata timeout de oito segundos.
 
 ## Votação
 
-O backend mantém `votacao: { status: 'aguardando', votos: {} }`. Os estados são `aguardando`, `votando` e `revelada`. Os comandos usam a sala e a identidade associadas ao socket, validadas no servidor:
+O backend mantém `votacao: { status: 'aguardando', votos: {}, roundId: 0 }`. Os estados são `aguardando`, `votando` e `revelada`. Os comandos usam a sala e a identidade associadas ao socket, validadas no servidor:
 
 - `room:start-voting`: somente host, a partir de aguardando ou revelada; limpa votos e abre a rodada. Também atende “Nova votação”. Não reinicia uma rodada já aberta.
 - `room:vote`: recebe `card`, valida participação, rodada aberta e pertencimento exato às cartas configuradas. Um voto por identidade; outra carta substitui o voto anterior.
 - `room:reveal-votes`: somente host, durante votação; permite revelar com participantes pendentes e bloqueia alterações posteriores.
 
-Todos usam o evento existente `room:state`. Cada participante recebe `participants[].votou` e, antes da revelação, somente o próprio valor em `votacao.votos`. Após revelar, todos recebem os valores, a interface mostra quem não votou, quantidade de votos e média informativa. A média considera apenas números finitos, incluindo zero e decimais; cartas futuras não numéricas são ignoradas. Não existe escolha automática de consenso nem histórico.
+Voto, início, reveal e configuração de deck enviam o `roundId` atual. Ele incrementa ao iniciar uma rodada ou mudar o deck; versão ausente/antiga é rejeitada com `STALE_ROUND`. Salvar o mesmo deck preserva a versão. Todos usam o evento existente `room:state`. Cada participante recebe `participants[].votou` e, antes da revelação, somente o próprio valor em `votacao.votos`. Após revelar, todos recebem os valores, a interface mostra quem não votou, quantidade de votos e média informativa. A média considera apenas números finitos, incluindo zero e decimais; cartas não numéricas são ignoradas. Não existe escolha automática de consenso nem histórico.
 
 ## Ciclo de vida e recuperação
 
@@ -61,11 +61,11 @@ O host pode usar **Transferir host** junto ao nome de outro participante. A stor
 
 **Sair da sala** está disponível para todos. Após confirmação do servidor, a participação é limpa e a tela volta ao início. Apenas `planning-poker:sala` é removida do localStorage; o UUID em `planning-poker:participante-id` e outras chaves são preservados. Tentar entrar em uma sala destruída retorna o mesmo `ROOM_NOT_FOUND` de um código inexistente.
 
-Uma desconexão temporária reserva a participação por **60 segundos**. Reentrar com o mesmo ID durante esse prazo preserva identidade, papel, participação e voto da rodada atual. O frontend tenta reassociar automaticamente no evento `connect`, usando o UUID existente e a chave `planning-poker:sala` (código/nome) no localStorage. Recarregar também permite recuperar a participação. Se o prazo expirar, a saída torna-se definitiva e o voto é removido; uma entrada posterior começa sem voto. O servidor continua sendo a fonte da verdade, inclusive se a rodada mudar durante a queda.
+Uma desconexão temporária reserva a participação por **60 segundos**. Reentrar com o mesmo ID e credencial privada durante esse prazo preserva identidade, papel, participação e voto da rodada atual. O frontend tenta reassociar automaticamente no evento `connect`, usando o UUID, a credencial privada e a chave `planning-poker:sala` (código/nome) no localStorage. Recarregar também permite recuperar a participação. Se o prazo expirar, a saída torna-se definitiva e o voto é removido; uma entrada posterior começa sem voto. O servidor continua sendo a fonte da verdade, inclusive se a rodada mudar durante a queda.
 
 Ao abrir a mesma identidade em outra aba, a conexão mais recente assume a participação. A anterior recebe `room:replaced`, deixa de receber estados e não pode votar. Seu disconnect não remove a nova associação. O host desconectado mantém o papel durante a tolerância; a transferência ocorre na saída definitiva.
 
-A configuração de cartas na criação permanece disponível no backend; a edição posterior pela interface continua desabilitada. Reiniciar o backend apaga as salas em memória. O UUID persistido identifica o participante, mas não substitui autenticação. Se o navegador bloquear localStorage, a recuperação fica limitada aos dados em memória.
+A configuração de cartas está disponível na interface para o host e é validada no backend. Reiniciar o backend apaga as salas em memória. O UUID persistido identifica o participante, mas não substitui autenticação. Se o navegador bloquear localStorage, a recuperação fica limitada aos dados em memória.
 ## Testar com dois contextos do navegador
 
 1. Abra http://localhost:5173 em uma aba normal, crie uma sala como `Viviane` e copie o código. Confira o selo Host e a lista com uma pessoa.
@@ -180,3 +180,53 @@ Na validação da preferência no navegador, uma reação recebida da outra iden
 Validação no navegador integrado com Jane e Viviane: pílula rápida, abertura pelo +, foco na busca, pesquisa “coracao azul”, categorias, setas, envio recebido pelas duas identidades, permanência visível após 1,1 segundo e remoção aos 2 segundos, fechamento por seleção/clique fora/Esc e retorno de foco. Um terceiro participante confirmou a troca de alvo com apenas um seletor aberto. O picker apresentou scroll interno, ficou dentro da mesa e não gerou scroll horizontal. A segunda identidade utilizou uma entrada temporária de QA com WebSocket em outra origem, removida após o teste; nenhuma configuração de produção foi alterada. A conferência em celular/touch real continua pendente; os limites de viewport estreito são cobertos por testes de geometria.
 
 O fechamento por hover considera uma área contínua entre carta e pílula, incluindo o espaço de 8 px. Uma ponte transparente e a verificação de posição do ponteiro permitem atravessar essa área devagar sem fechar o balão. O balão rápido permanece aberto após escolher uma reação e fecha ao sair da área conjunta; clique fora e Esc continuam disponíveis. O picker expandido fecha após a seleção. O listener de pointermove é removido quando a pílula desmonta. O teste de regressão cobre o espaço acima/abaixo da carta; no navegador, uma pausa no espaço seguida de clique enviou 👍 corretamente.
+
+## Auditoria funcional e técnica — 08/10/2026
+
+A lista completa de 106 critérios foi auditada: **APROVADO COM RESSALVAS**.
+A execução final teve **25/25 testes backend e 17/17 frontend aprovados**,
+com build local/Docker, construção e reinício dos containers e interface real.
+O relatório detalha cinco correções, os cenários exercitados e cinco critérios
+parciais que não foram aprovados. Consulte [o relatório da auditoria](docs/auditoria-v1.0.md).
+
+Comandos de regressão: `npm test --prefix backend`,
+`npm test --prefix frontend` e `npm run build --prefix frontend`.
+
+## Configuração do deck
+
+O host abre **Configurar deck** (engrenagem junto às cartas), escolhe Fibonacci,
+Sequencial, T-Shirt ou Personalizado e confere a prévia antes de salvar.
+Fibonacci é o padrão: `0, 0.5, 1, 2, 3, 5, 8, 13, 21`.
+Valores são separados por vírgulas; decimais usam ponto. Rótulos como `XS`, `?`
+e `☕` são aceitos. O servidor remove espaços extras, normaliza números e rejeita
+vazios, duplicados (inclusive `1, 1.0` e `XS, xs`), números negativos e decks
+fora do limite de 1 a 100 cartas com até 20 caracteres por rótulo.
+
+`room:configure-deck` usa a associação da conexão e exige o host atual.
+O deck é publicado no `room:state`, inclusive na entrada e reconexão, e é mantido
+na transferência de host. Um deck diferente (inclusive ordem diferente) limpa
+os votos, oculta os resultados e retorna ao estado `aguardando`; o host inicia
+a nova votação. Salvar valores equivalentes na mesma ordem preserva a rodada.
+Os votos precisam corresponder exatamente a um valor do deck; rótulos não entram
+na média numérica. As salas continuam em memória e desaparecem ao reiniciar o backend.
+
+Para validar: execute `npm --prefix backend test`, `node --test frontend/test/*.test.js`
+e `npm --prefix frontend run build`. Com Docker, execute os comandos dentro dos
+serviços correspondentes. Em dois perfis de navegador, vote e revele, altere o
+deck no host e confira a limpeza e atualização nos dois clientes; inicie novamente,
+vote `?` ou `☕`, salve o mesmo deck e confira que a rodada permanece. Recarregue o
+participante e transfira o host para conferir a persistência e as permissões.
+
+### Encerramento das pendências — 09/10/2026
+
+Regressão **45/45** (25 backend + 20 frontend), build aprovado e soak de três
+minutos com **1.083 salas e 7.581 clientes**. Limpeza de recursos e comportamento
+de memória foram verificados no escopo automatizado; continuam pendentes a
+origem do MutationObserver no navegador, touch físico e outra máquina.
+Nenhum código de produção foi alterado nesta revisão.
+Consulte [o encerramento da auditoria](docs/encerramento-auditoria-v1.0.md).
+
+Para repetir o soak, a partir da raiz:
+`node --expose-gc backend/audit/soak.cjs --duration=180000 --output=docs/soak-v1.0.json`.
+O ensaio cria um servidor isolado e usa tolerância de abandono de 75 ms;
+a configuração de produção permanece em 60 segundos.

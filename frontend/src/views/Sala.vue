@@ -1,5 +1,6 @@
 <script setup>
 import CartaParticipante from '../components/CartaParticipante.vue'
+import ConfiguracaoSala from '../components/ConfiguracaoSala.vue'
 import CampoTexto from '../components/CampoTexto.vue'
 import BotaoBase from '../components/BotaoBase.vue'
 import MensagemErro from '../components/MensagemErro.vue'
@@ -18,6 +19,8 @@ const router = useRouter()
 async function sair() { if (await sala.sair()) router.push('/') }
 const participante = useParticipanteStore()
 const sala = useSalaStore()
+const configuracaoAberta = ref(false)
+watch(() => [sala.ehHost, sala.codigo], () => { configuracaoAberta.value = false })
 const mesa = ref(null)
 function obterTrajeto(reacao) {
   const cartas = Array.from(mesa.value?.querySelectorAll('[data-participant-id]') ?? [])
@@ -166,8 +169,9 @@ async function copiarCodigo() {
               variante="icon"
               tamanho="icon"
               type="button"
-              aria-label="Configurações da sala — disponível em uma próxima etapa"
-              disabled title="Configurações — disponível em uma próxima etapa"
+              aria-label="Configurar deck"
+              :disabled="sala.pending || !sala.connected || sala.restoring"
+              @click="configuracaoAberta = true"
             >
               <Settings :size="16" aria-hidden="true" />
             </BotaoBase>
@@ -197,6 +201,7 @@ async function copiarCodigo() {
         </section>
       </div>
     </template>
+    <ConfiguracaoSala v-if="estaNaSala && sala.ehHost && configuracaoAberta" @fechar="configuracaoAberta = false" />
   </main>
 </template>
 
